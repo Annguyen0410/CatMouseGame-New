@@ -28,6 +28,11 @@ This script controls the main menu screen and the find lobby screen.
 
 Bugs to fix:
 
-- Terminals spawn a little too close together
-- The timers aren't ticking at regular time. A 30 second timer ticks extra slow and takes 2 minutes to finish
-- If you're a mouse and the cat kills you, there's no "You Died" screen
+* Terminals spawn a little too close together
+* The timers aren't ticking at regular time. A 30 second timer ticks extra slow and takes 2 minutes to finish
+* If you're a mouse and the cat kills you, there's no "You Died" screen
+
+Things to do:
+* Add music & sound effects
+* Heavily improve the UI
+* 
