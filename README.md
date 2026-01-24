@@ -35,6 +35,7 @@ Bugs to fix:
 Things to do:
 * Add music & sound effects
 * Make artwork
+* Self host this on a website or host this website using Render
 
 Optional things to do:
 * Add more characters & add a character selection screen
