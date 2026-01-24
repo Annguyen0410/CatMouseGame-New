@@ -1,7 +1,7 @@
 # CatMouseGame
 
 Every file that we coded described:
-
+Quick review: HTML generates the content on each webpage. CSS controls the UI on each webpage. Javascript is like the brain and controls how the game actually works.
 
 
 ### database.js
