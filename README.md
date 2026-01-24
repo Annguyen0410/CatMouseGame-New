@@ -34,5 +34,8 @@ Bugs to fix:
 
 Things to do:
 * Add music & sound effects
-* Heavily improve the UI
+* Make artwork
+
+Optional things to do:
+* Add more characters & add a character selection screen
 * 
