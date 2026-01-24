@@ -44,4 +44,4 @@ Things to do:
 
 Optional things to do:
 * Add more characters & add a character selection screen
-* 
+* Add a currency system. You get coins everytime you win and you can use coins to buy powerups or new characters.
