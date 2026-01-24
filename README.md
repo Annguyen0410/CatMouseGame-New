@@ -25,3 +25,8 @@ This script generates and loads the map. It randomly loads the spawn location of
 
 ### main.js
 This script controls the main menu screen and the find lobby screen.
+
+Bugs to fix:
+
+- Terminals spawn a little too close together
+- The timers aren't ticking at regular time. A 30 second timer ticks extra slow and takes 2 minutes to finish
