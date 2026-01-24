@@ -15,7 +15,7 @@ This script is the main code that controls how the game works. From completing t
 
 ### In the public folder:
 ### index.html
-This script has all the html code for all pages on the website.
+This script has all the code that generates the content that's shown on each page of the website.
 
 ### style.css
 This script has all the css code that controls what the UI on each page of the website looks like.
