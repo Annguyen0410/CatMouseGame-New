@@ -29,6 +29,8 @@ This script generates and loads the map. It randomly loads the spawn location of
 ### main.js
 This script controls the main menu screen and the find lobby screen.
 
+### Other things
+
 Bugs to fix:
 
 * Terminals spawn a little too close together
