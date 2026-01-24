@@ -12,3 +12,17 @@ This script uses npm to run the game locally on your computer so this script sta
 
 ### server.js
 This script is the main code that controls how the game works. From completing terminals, to attacking etc.
+
+### In the public folder:
+### index.html
+This script has all the html code for all pages on the website.
+
+### style.css
+This script has all the css code that controls what the UI on each page of the website looks like.
+
+### In public/js:
+### game.js
+This script generates and loads the map. It randomly loads the spawn location of the players, and the locations of the terminals.
+
+### main.js
+This script controls the main menu screen and the find lobby screen.
