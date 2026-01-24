@@ -1,8 +1,7 @@
 # CatMouseGame
 
 ### How to run the game locally
-Make sure you have Git, Node and NPM installed. Then, clone this repo to your PC using a terminal. In your terminal, go to the game files and in the main folder run
-`npm start`. Then go to `127.0.0.1:3030` to play your game in your web browser. Leave the terminal open while you play the game.
+Clone this repo to your PC using a terminal. In your terminal, go to the main folder for this game and then make sure Git, Node and NPM are installed. Then, run `npm start`. Then go to `127.0.0.1:3030` to play your game in your web browser. Leave the terminal open while you play the game.
 
 Quick review: HTML generates the content on each webpage. CSS controls the UI on each webpage. Javascript is like the brain and controls how the game actually works.
 
