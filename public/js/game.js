@@ -22,7 +22,7 @@ let cursors;
 let myId = socket.id;
 let dynamicGraphics;
 let staticGraphics;
-let visualPlayers = {}; // Store smoothed positions
+let visualPlayers = {};
 
 function preload() {}
 
