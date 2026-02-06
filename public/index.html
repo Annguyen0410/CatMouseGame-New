@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- Assignment 4 PDF: FR-1 starting page with main menu (Login, register, Settings); FR-20 audio/custom control menu. -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -10,76 +11,87 @@
 </head>
 <body>
 
-    <div id="main-menu">
+    <!-- Ryan Mendez - Main menu: Start (login/register), Settings. FR-1: principal menu with Login, register, settings. -->
+    <div id="main-menu" role="main">
         <h1 class="game-title">Cat & Mouse Game</h1>
-        
-        <div class="nav-buttons">
-            <div id="btn-start" class="nav-item">Start</div>
-            <div id="btn-settings" class="nav-item">Settings</div>
-        </div>
 
-        <div id="panel-login" class="slide-panel hidden-right">
+        <nav class="nav-buttons" aria-label="Main menu">
+            <button type="button" id="btn-start" class="nav-item">Start</button>
+            <button type="button" id="btn-settings" class="nav-item">Settings</button>
+        </nav>
+
+        <div id="panel-login" class="slide-panel hidden-right" aria-label="Login form">
             <h2>Login</h2>
-            <div class="form-group">
-                <label>Username:</label>
-                <input type="text" id="username" placeholder="...">
-            </div>
-            <div class="form-group">
-                <label>Password:</label>
-                <input type="password" id="password" placeholder="...">
-            </div>
-            <button id="login-submit-btn">Enter</button>
-            <div id="login-msg"></div>
+            <!-- An Nguyen - Form wrapper for login so password field is in a form (fixes DOM hint). FR-1: login. -->
+            <form id="login-form" aria-describedby="login-msg">
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" placeholder="Enter username" autocomplete="username" aria-describedby="login-msg">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" placeholder="Enter password" autocomplete="current-password" aria-describedby="login-msg">
+                </div>
+                <button type="submit" id="login-submit-btn" aria-describedby="login-msg">Enter</button>
+                <p class="login-hint">First time? Use any username and password to register.</p>
+                <div id="login-msg" role="status" aria-live="polite"></div>
+            </form>
         </div>
 
-        <!-- SLIDING SETTINGS PANEL -->
-        <div id="panel-settings" class="slide-panel hidden-right">
+        <!-- Ryan Mendez - Settings: music and SFX volume. FR-20: user can customize volume of music and sound effects. -->
+        <div id="panel-settings" class="slide-panel hidden-right" aria-label="Settings">
             <h2>Settings</h2>
             <div class="setting-row">
-                <label>Music:</label>
-                <input type="range" id="music-vol" min="0" max="100" value="50">
+                <label for="music-vol">Music:</label>
+                <input type="range" id="music-vol" min="0" max="100" value="50" aria-label="Music volume">
             </div>
             <div class="setting-row">
-                <label>Jumpscare Volume:</label>
-                <input type="range" id="sfx-vol" min="0" max="100" value="50">
+                <label for="sfx-vol">Jumpscare Volume:</label>
+                <input type="range" id="sfx-vol" min="0" max="100" value="50" aria-label="Jumpscare volume">
             </div>
-            <button id="close-settings">Close</button>
+            <button type="button" id="close-settings">Close</button>
         </div>
     </div>
 
-    <!-- LOBBY SCREEN -->
-    <div id="lobby-screen" class="hidden">
+    <!-- Ryan Mendez - Lobby: create room, refresh list, player list, timer. FR-3: lobby displays rooms, players; FR-4 create, FR-5 join. -->
+    <div id="lobby-screen" class="hidden" role="region" aria-label="Lobby">
         <h1>Lobby Selection</h1>
         <div class="lobby-controls">
-            <button id="create-lobby-btn">Create Lobby</button>
-            <button id="find-lobby-btn">Refresh List</button>
+            <button type="button" id="create-lobby-btn">Create Lobby</button>
+            <button type="button" id="find-lobby-btn">Refresh List</button>
         </div>
         <div id="active-lobby-display">
-            <h2 id="lobby-timer">Waiting...</h2>
-            <ul id="player-list"></ul>
+            <p id="lobby-timer">Waiting...</p>
+            <ul id="player-list" aria-label="Players in lobby"></ul>
         </div>
     </div>
 
-    <!-- GAME UI OVERLAY -->
+    <!-- Ryan Mendez - In-game HUD: HP, sprint, role, timer, terminals. FR-9: client shows map, characters, interactivity. An Nguyen: controls-hint, buff-indicators, event-feed, minimap. -->
     <div id="game-ui" class="hidden">
         <div id="stats">
             <div id="hp-bar">HP: 100</div>
             <div id="sprint-bar">Sprint Ready</div>
             <div id="role-display"></div>
+            <div id="controls-hint">WASD move · Shift sprint · Space action</div>
+            <div id="buff-indicators"></div>
         </div>
         <div id="top-center-ui">
             <div id="timer-display"></div>
             <div id="terminals-left">Terminals: 0/5</div>
         </div>
+        <div id="event-feed" aria-live="polite"></div>
+        <div id="minimap-container">
+            <canvas id="minimap" width="140" height="140"></canvas>
+        </div>
     </div>
     
-    <!-- GAME OVER SCREEN -->
-    <div id="game-over-screen" class="hidden">
+    <!-- Ryan Mendez - Game over screen: winner text, back to lobby. FR-18: display result (win/loss) and return to lobby. -->
+    <div id="game-over-screen" class="hidden" role="alertdialog" aria-labelledby="winner-text">
         <h1 id="winner-text"></h1>
-        <button onclick="location.reload()">Return to Menu</button>
+        <button type="button" id="game-over-back">Back to Lobby</button>
     </div>
 
-    <!-- PHASER CONTAINER -->
+    <!-- Ryan Mendez - Phaser canvas container. FR-9: client displays game world. Section 3: Phaser.js for rendering. -->
     <div id="game-container"></div>
 
     <script src="js/main.js"></script>

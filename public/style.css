@@ -1,3 +1,8 @@
+/**
+ * style.css - Styles for main menu, lobby, game UI, game over. Assignment 4 PDF: FR-1 main menu; FR-3 lobby; FR-18 results; FR-20 preferences.
+ * Ryan Mendez - Base layout, main menu, nav, slide panels, login/settings, lobby, game UI, game over, overlays.
+ * An Nguyen - controls-hint, buff-indicators, event-feed, minimap-container.
+ */
 @import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Nunito:wght@400;700;900&display=swap');
 
 body { 
@@ -37,6 +42,7 @@ body {
 }
 
 .nav-item {
+    display: block;
     font-size: 45px;
     color: white;
     font-family: 'Luckiest Guy', cursive;
@@ -45,6 +51,15 @@ body {
     margin-bottom: 25px;
     transition: transform 0.2s, color 0.2s;
     letter-spacing: 2px;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+}
+
+.nav-item:focus-visible {
+    outline: 3px solid #FFD700;
+    outline-offset: 4px;
 }
 
 .nav-item:hover {
@@ -148,6 +163,45 @@ button:active {
     letter-spacing: 2px;
 }
 
+#lobby-screen #lobby-timer {
+    font-family: 'Nunito', sans-serif;
+    font-size: 22px;
+    margin: 15px 0;
+}
+
+.lobby-player-item {
+    list-style: none;
+    font-size: 20px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+#leave-lobby-btn {
+    margin-top: 20px;
+    background: #555;
+    max-width: 200px;
+}
+
+#leave-lobby-btn:hover {
+    background: #666;
+}
+
+.login-hint {
+    font-size: 14px;
+    color: rgba(255,255,255,0.7);
+    margin-top: 12px;
+}
+
+button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+input:focus-visible, button:focus-visible {
+    outline: 3px solid #FFD700;
+    outline-offset: 2px;
+}
+
 #game-ui { 
     pointer-events: none; 
     position: absolute; 
@@ -178,9 +232,93 @@ button:active {
     letter-spacing: 1px;
 }
 
+#controls-hint {
+    font-size: 14px;
+    color: rgba(255,255,255,0.75);
+    margin-top: 8px;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 400;
+}
+
+#buff-indicators {
+    margin-top: 6px;
+    font-size: 16px;
+}
+
+#buff-indicators .buff {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    margin-right: 6px;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 700;
+}
+
+#buff-indicators .buff.speed {
+    background: rgba(0,170,255,0.5);
+    color: #fff;
+}
+
+#buff-indicators .buff.rage {
+    background: rgba(255,80,80,0.6);
+    color: #fff;
+}
+
+#event-feed {
+    position: absolute;
+    top: 80px;
+    right: 20px;
+    width: 220px;
+    max-height: 180px;
+    overflow: hidden;
+    text-align: right;
+    pointer-events: none;
+}
+
+.feed-item {
+    font-family: 'Nunito', sans-serif;
+    font-size: 14px;
+    color: #fff;
+    text-shadow: 1px 1px 2px #000;
+    padding: 4px 8px;
+    margin-bottom: 2px;
+    background: rgba(0,0,0,0.4);
+    border-radius: 6px;
+    animation: feedIn 0.3s ease;
+}
+
+@keyframes feedIn {
+    from { opacity: 0; transform: translateX(10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+#minimap-container {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    border: 3px solid rgba(255,255,255,0.5);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 0 15px rgba(0,0,0,0.5);
+}
+
+#minimap {
+    display: block;
+    background: rgba(0,0,0,0.6);
+}
+
 #game-over-screen {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    background: #333; padding: 50px; text-align: center; border: 5px solid #fff; pointer-events: auto; z-index: 200; border-radius: 25px;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.95);
+    padding: 50px;
+    text-align: center;
+    border: 5px solid #fff;
+    pointer-events: auto;
+    z-index: 200;
+    border-radius: 25px;
 }
 #game-over-screen h1 { 
     font-family: 'Luckiest Guy', cursive; 
@@ -190,3 +328,47 @@ button:active {
 }
 
 #game-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+
+.overlay-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 200;
+    background: rgba(0,0,0,0.95);
+    padding: 40px;
+    border: 4px solid white;
+    border-radius: 20px;
+    min-width: 400px;
+    text-align: center;
+}
+
+.overlay-panel h3 {
+    font-family: 'Luckiest Guy', cursive;
+    font-size: 45px;
+    color: #AEEEEE;
+    margin: 0 0 20px 0;
+    letter-spacing: 2px;
+}
+
+.overlay-empty {
+    color: #bbb;
+    font-family: 'Nunito', sans-serif;
+    font-size: 20px;
+    margin: 10px 0;
+}
+
+.lobby-join-btn {
+    display: block;
+    margin: 10px auto;
+    max-width: 100%;
+}
+
+.overlay-cancel-btn {
+    margin-top: 20px;
+    background: #555;
+}
+
+.overlay-cancel-btn:hover {
+    background: #666;
+}

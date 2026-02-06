@@ -1,0 +1,41 @@
+/**
+ * config.js - Game and server constants. Assignment 4 PDF: Section 3 - single source of truth for server/game params.
+ * Ryan Mendez - Core game constants (players 2-5, map, terminals, attack, sprint). FR-4: room parameters 2-5 players; FR-8: map.
+ * An Nguyen - Power-up and obstacle constants. FR-8: map with obstacles; gameplay extensions.
+ */
+module.exports = {
+  PORT: 3030,
+  MAP_SIZE: 2000,
+  TICK_RATE: 240,
+  GAME_TIME_SEC: 900,
+  LOBBY_COUNTDOWN_SEC: 30,
+  MIN_PLAYERS: 2,
+  MAX_LOBBY_PLAYERS: 5,
+  TERMINALS_TO_COMPLETE: 5,
+  TERMINAL_COUNT: 6,
+  ATTACK_RANGE: 100,
+  ATTACK_DAMAGE: 40,
+  CAT_SLOW_DURATION_MS: 2000,
+  MOUSE_SPEED_BOOST_DURATION_MS: 2000,
+  ATTACK_COOLDOWN_SEC: 2,
+  SPRINT_MULTIPLIER: 1.6,
+  SPRINT_DURATION_SEC: 4,
+  SPRINT_COOLDOWN_SEC: 20,
+  BASE_SPEED: 300,
+  REPAIR_RADIUS: 100,
+  EXIT_RADIUS: 100,
+  USERNAME_MIN_LEN: 2,
+  USERNAME_MAX_LEN: 20,
+  PASSWORD_MIN_LEN: 4,
+  POWERUP_COUNT: 5,
+  POWERUP_RESPAWN_SEC: 25,
+  POWERUP_HEAL_AMOUNT: 30,
+  POWERUP_SPEED_DURATION_MS: 8000,
+  POWERUP_SPEED_MULT: 1.25,
+  POWERUP_RAGE_DURATION_MS: 6000,
+  POWERUP_RAGE_DAMAGE_MULT: 1.5,
+  POWERUP_PICKUP_RADIUS: 60,
+  OBSTACLE_COUNT: 12,
+  OBSTACLE_MIN_SIZE: 80,
+  OBSTACLE_MAX_SIZE: 120,
+};
