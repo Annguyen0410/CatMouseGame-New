@@ -1,5 +1,5 @@
 /**
- * main.js - Client entry: Socket.IO, menu/lobby/game-over UI. Assignment 4 PDF: FR-1 main menu; FR-3 lobby; FR-18 results; Section 3 client communicates with server.
+ * main.js - Client entry: Socket.IO, menu/lobby/game-over UI. Assignment 4 PDF: FR-1, FR-3, FR-18; Section 3.
  */
 const socket = io();
 let currentUser = null;
@@ -13,7 +13,7 @@ const gameOverScreen = document.getElementById('game-over-screen');
 const panelLogin = document.getElementById('panel-login');
 const panelSettings = document.getElementById('panel-settings');
 
-/* Ryan Mendez - Hides login and settings slide panels. */
+/* Ryan Mendez - Hides login and settings slide panels. Short: close panels. PDF: FR-1 (main menu). */
 function closeAllPanels() {
     panelLogin.classList.remove('visible-right');
     panelLogin.classList.add('hidden-right');
@@ -21,7 +21,7 @@ function closeAllPanels() {
     panelSettings.classList.add('hidden-right');
 }
 
-/* Ryan Mendez - Start button toggles login panel. FR-1: main menu option Login. */
+/* Ryan Mendez - Start button toggles login panel. Short: main menu Login. PDF: FR-1 (Login option). */
 document.getElementById('btn-start').addEventListener('click', () => {
     const isLoginOpen = panelLogin.classList.contains('visible-right');
     closeAllPanels();
@@ -31,7 +31,7 @@ document.getElementById('btn-start').addEventListener('click', () => {
     }
 });
 
-/* Ryan Mendez - Settings button toggles settings panel. FR-20: custom control/audio menu. */
+/* Ryan Mendez - Settings button toggles settings panel. Short: audio/custom control menu. PDF: FR-20 (volume, custom control). */
 document.getElementById('btn-settings').addEventListener('click', () => {
     const isSettingsOpen = panelSettings.classList.contains('visible-right');
     closeAllPanels();
@@ -45,7 +45,7 @@ document.getElementById('close-settings').addEventListener('click', () => {
     closeAllPanels();
 });
 
-/* Ryan Mendez - Login/register: send credentials to server; show lobby on success. An Nguyen: form submit with preventDefault. FR-1 login/register; FR-2 register. */
+/* Ryan Mendez - Login form submit; An Nguyen - preventDefault. Short: send credentials, show lobby. PDF: FR-1 (login/register), FR-2 (register). */
 const loginSubmitBtn = document.getElementById('login-submit-btn');
 document.getElementById('login-form').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -63,7 +63,7 @@ document.getElementById('login-form').addEventListener('submit', (e) => {
     socket.emit('login', { username: user, password: pass });
 });
 
-/* Ryan Mendez - On login response: show lobby or error message. FR-1 postcondition: main menu with login. */
+/* Ryan Mendez - On login response: show lobby or error. Short: post-login UI. PDF: FR-1 (main menu with login). */
 socket.on('loginResponse', (res) => {
     loginSubmitBtn.disabled = false;
     loginSubmitBtn.textContent = 'Enter';
@@ -79,7 +79,7 @@ socket.on('loginResponse', (res) => {
     }
 });
 
-/* Ryan Mendez - Create lobby and refresh lobby list. FR-4: form new room; FR-3: view available rooms. */
+/* Ryan Mendez - Create lobby and refresh list buttons. Short: form/join rooms. PDF: FR-4 (create room), FR-3 (view rooms). */
 document.getElementById('create-lobby-btn').addEventListener('click', () => {
     socket.emit('createLobby');
 });
@@ -88,7 +88,7 @@ document.getElementById('find-lobby-btn').addEventListener('click', () => {
     socket.emit('getLobbies');
 });
 
-/* Ryan Mendez - Display available lobbies as overlay with join buttons. FR-3: lobby displays game rooms. */
+/* Ryan Mendez - Display lobby list overlay with join buttons. Short: lobby displays rooms. PDF: FR-3 (lobby displays rooms, players). */
 socket.on('lobbyList', (list) => {
     const existing = document.getElementById('lobby-list-overlay');
     if (existing) existing.remove();
@@ -127,7 +127,7 @@ socket.on('lobbyList', (list) => {
     document.body.appendChild(div);
 });
 
-/* Ryan Mendez - Joined a lobby: show lobby id, timer, player list, leave button. FR-5 postcondition: user in room player list. */
+/* Ryan Mendez - Joined lobby: show id, timer, player list, leave button. Short: user in room. PDF: FR-5 (user in player list). */
 socket.on('joinedLobby', (data) => {
     const { lobbyId, players: playerList } = typeof data === 'string' ? { lobbyId: data, players: [] } : data;
     currentLobby = lobbyId;
@@ -138,6 +138,7 @@ socket.on('joinedLobby', (data) => {
     updatePlayerList(playerList);
 });
 
+/* Ryan Mendez - Left lobby: reset display. Short: leave room UI. PDF: FR-3. */
 socket.on('leftLobby', () => {
     currentLobby = null;
     const lobbyDisplay = document.getElementById('active-lobby-display');
@@ -145,15 +146,18 @@ socket.on('leftLobby', () => {
     applyLobbyStyles(lobbyDisplay);
 });
 
+/* Ryan Mendez - Update player list when someone joins/leaves. Short: lobby players. PDF: FR-3 (number of players). */
 socket.on('lobbyPlayers', (playerList) => {
     updatePlayerList(playerList);
 });
 
+/* Ryan Mendez - Applies font/size to lobby title. Short: lobby styling. PDF: FR-3. */
 function applyLobbyStyles(container) {
     const h2 = container.querySelector('#lobby-title');
     if (h2) { h2.style.fontFamily = "'Luckiest Guy', cursive"; h2.style.fontSize = '40px'; h2.style.letterSpacing = '2px'; }
 }
 
+/* Ryan Mendez - Renders player list in lobby. Short: show players in room. PDF: FR-3 (players in room). */
 function updatePlayerList(playerList) {
     const ul = document.getElementById('player-list');
     if (!ul) return;
@@ -168,27 +172,27 @@ function updatePlayerList(playerList) {
 
 socket.on('lobbyUpdate', () => {});
 
-/* Ryan Mendez - Update lobby countdown display. FR-6: countdown timer then game session launched. */
+/* Ryan Mendez - Lobby countdown display. Short: countdown then launch. PDF: FR-6 (countdown then game session launched). */
 socket.on('lobbyTimer', (time) => {
     const timerEl = document.getElementById('lobby-timer');
     if (timerEl) timerEl.textContent = 'Starting in: ' + time;
 });
 
-/* Ryan Mendez - Game started: hide lobby, show game UI, start Phaser with initial state. FR-6 postcondition: all players to game screen. */
+/* Ryan Mendez - Game started: hide lobby, show game UI, start game with initial state. Short: all players to game screen. PDF: FR-6 (game session begins). */
 socket.on('gameStart', (initialState) => {
     lobbyScreen.classList.add('hidden');
     gameUi.classList.remove('hidden');
     startGame(initialState);
 });
 
-/* Ryan Mendez - Game over: show winner (Cat/Mice) and game-over screen. FR-16/17 postcondition: result shown; FR-18: result and back to lobby. */
+/* Ryan Mendez - Game over: show winner and game-over screen. Short: result shown. PDF: FR-16/17 (win condition), FR-18 (display result). */
 socket.on('gameOver', (winner) => {
     gameUi.classList.add('hidden');
     gameOverScreen.classList.remove('hidden');
     document.getElementById('winner-text').textContent = winner === 'cat' ? 'CAT WINS' : 'MICE WIN';
 });
 
-/* Ryan Mendez - Back to lobby from game over. FR-18: results displayed and taken back to lobby. */
+/* Ryan Mendez - Back to lobby from game over. Short: return to lobby. PDF: FR-18 (taken back to lobby). */
 document.getElementById('game-over-back').addEventListener('click', () => {
     currentLobby = null;
     gameOverScreen.classList.add('hidden');

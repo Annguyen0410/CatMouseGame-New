@@ -1,356 +1,420 @@
 /**
- * game.js - Phaser game scene: render map, players, terminals; capture input; sync with server state. Assignment 4 PDF: FR-9 client shows map/characters; FR-10 input to server; Section 3 Phaser for rendering.
+ * game.js - Three.js game scene: render 3D map, players, terminals; capture input; sync with server state.
+ * An Nguyen - Migrated entire client from 2D (Phaser) to 3D (Three.js): scene, camera, textures, floor/wall design, characters, powerups.
+ * Assignment 4 PDF: FR-9 client displays map/characters; FR-10 input; Section 3 client-side rendering.
  */
-let gameInstance;
 
-/* Ryan Mendez - Boots Phaser with initial state. An Nguyen: socket.off to avoid duplicate listeners; currentScene null on destroy. FR-6: game session begins. */
+/* Ryan Mendez - Global refs. An Nguyen - 3D engine (Three.js scene, camera, renderer) replacing original 2D. FR-9: client shows game world. */
+let scene, camera, renderer;
+let players = {};
+let obstacles = [];
+let terminals = [];
+let powerups = [];
+let socketId = null;
+let myId = null;
+let lastState = null;
+let animationId = null;
+let font = null; // For 3D text if needed, or use HTML overlay
+
+/* Ryan Mendez - Base materials. An Nguyen - 3D materials for Cat, Mouse, walls, floor, terminals, exit (used with textures). FR-9: client renders characters. */
+const MAT_CAT = new THREE.MeshLambertMaterial({ color: 0xff8800 }); // Orange
+const MAT_MOUSE = new THREE.MeshLambertMaterial({ color: 0x888888 }); // Grey
+const MAT_WALL = new THREE.MeshLambertMaterial({ color: 0x555555 });
+const MAT_FLOOR = new THREE.MeshLambertMaterial({ color: 0x222222 });
+const MAT_TERM_INC = new THREE.MeshLambertMaterial({ color: 0xffff00 });
+const MAT_TERM_COM = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
+const MAT_EXIT_CLOSED = new THREE.MeshLambertMaterial({ color: 0x440000 });
+const MAT_EXIT_OPEN = new THREE.MeshLambertMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 });
+
+/* Ryan Mendez - Tracks keyboard state for movement and actions. FR-10: input devices for move/interact. */
+const keys = { w: false, a: false, s: false, d: false, shift: false, space: false, f: false };
+
+/* Ryan Mendez - Entry point: sets up scene, camera, renderer, listeners, socket handlers. FR-9: client displays game world; FR-12: state from server. */
 function startGame(initialState) {
+    if (animationId) cancelAnimationFrame(animationId);
+
+    const container = document.getElementById('game-container');
+    container.innerHTML = '';
+
+    /* An Nguyen - 3D scene (replaced 2D canvas): background, fog for depth. FR-9: client shows map. */
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf5f5dc); // Beige background for cozy feel
+    scene.fog = new THREE.Fog(0xf5f5dc, 500, 2500);
+
+    /* An Nguyen - 3D perspective camera, top-down angled view (replaced 2D view). FR-9: player observes game world. */
+    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 5000);
+    camera.position.set(0, 800, 600); // High up and angled
+    camera.lookAt(0, 0, 0);
+
+    /* An Nguyen - WebGL 3D renderer with antialias and shadows (replaced 2D renderer). Section 3: client-side rendering. */
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    /* An Nguyen - Real textures for floor and walls (wood floor PNG, wall texture PNG); replaced flat/SVG look. FR-8: map with obstacles. */
+    const loader = new THREE.TextureLoader();
+    const woodTexture = loader.load('assets/wood_floor.png');
+    woodTexture.wrapS = THREE.RepeatWrapping;
+    woodTexture.wrapT = THREE.RepeatWrapping;
+    woodTexture.repeat.set(15, 15);
+
+    const wallTexture = loader.load('assets/wall_texture.png');
+    wallTexture.wrapS = THREE.RepeatWrapping;
+    wallTexture.wrapT = THREE.RepeatWrapping;
+
+    const MAT_FLOOR_TEX = new THREE.MeshLambertMaterial({ map: woodTexture });
+    window.MAT_WALL_TEX = new THREE.MeshLambertMaterial({ map: wallTexture }); // Export Global for updateGame
+
+    /* Ryan Mendez - Ambient and directional light with shadows. FR-9: visual rendering. */
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Neutral ambient
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xfff5e6, 0.8); // Warm sun
+    dirLight.position.set(500, 1000, 500);
+    dirLight.castShadow = true;
+    dirLight.shadow.camera.left = -1000;
+    dirLight.shadow.camera.right = 1000;
+    dirLight.shadow.camera.top = 1000;
+    dirLight.shadow.camera.bottom = -1000;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+    scene.add(dirLight);
+
+    /* An Nguyen - 3D floor plane with wood texture (floor/wall design). FR-8: playable map. */
+    const floorGeo = new THREE.PlaneGeometry(3000, 3000);
+    const floor = new THREE.Mesh(floorGeo, MAT_FLOOR_TEX);
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    /* Ryan Mendez - Key and resize listeners. FR-10: keyboard used to move and interact. */
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.removeEventListener('resize', onWindowResize);
+    window.addEventListener('resize', onWindowResize);
+
+    /* Ryan Mendez - Subscribe to game state and events from server. FR-12: server disseminates state to clients. */
     socket.off('gameState');
     socket.off('gameEvent');
-    if (gameInstance) gameInstance.destroy(true);
-    currentScene = null;
+    socket.off('terminalQuestion');
+    socket.off('terminalError');
+    socket.off('terminalComplete');
 
-    const config = {
-        type: Phaser.AUTO,
-        parent: 'game-container',
-        width: window.innerWidth,
-        height: window.innerHeight,
-        backgroundColor: '#111',
-        scene: { preload, create, update }
-    };
-    gameInstance = new Phaser.Game(config);
-
-    window.addEventListener('resize', () => {
-        gameInstance.scale.resize(window.innerWidth, window.innerHeight);
-    });
-}
-
-const MAP_SIZE = 2000;
-let cursors;
-let myId = socket.id;
-let dynamicGraphics;
-let staticGraphics;
-let visualPlayers = {};
-let lastState = null;
-let currentScene = null;
-let floatingTexts = [];
-let eventFeedList = [];
-const MAX_FEED_ITEMS = 5;
-
-function preload() {}
-
-function create() {
-    currentScene = this;
-    floatingTexts = [];
-    eventFeedList = [];
-
-    staticGraphics = this.add.graphics();
-    drawGrid(staticGraphics);
-    dynamicGraphics = this.add.graphics();
-
-    this.hpLabels = {};
-
-    cursors = this.input.keyboard.createCursorKeys();
-    this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
-    this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-    this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
-    this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
-    this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-    this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
-
-    /* Ryan Mendez - Receive server state and redraw. FR-12 postcondition: current state to all clients. */
+    /* Ryan Mendez - On gameState: update 3D world and UI; show class selection or cat wait during selection phase. FR-12: current state to all clients. */
     socket.on('gameState', (state) => {
         lastState = state;
+        updateGame(state);
         updateUI(state);
-        drawGame(currentScene, state);
-    });
 
-    /* An Nguyen - Handle game events: damage float + screen shake, terminal/exit/escape/catch/power-up feed. FR-13/14: players informed. */
-    socket.on('gameEvent', (e) => {
-        if (e.type === 'catHit' && e.targetId === socket.id && currentScene) {
-            floatingTexts.push({ text: '-' + Math.round(e.damage), x: (lastState && lastState.players[socket.id]) ? lastState.players[socket.id].x : 0, y: (lastState && lastState.players[socket.id]) ? lastState.players[socket.id].y : 0, t: 0 });
-            currentScene.cameras.main.shake(200, 0.008);
-        }
-        if (e.type === 'terminalComplete') {
-            addEventFeed('Terminal repaired! (' + (e.count || 0) + '/5)');
-        }
-        if (e.type === 'exitOpen') {
-            addEventFeed('Exit opened! Run to center!');
-        }
-        if (e.type === 'mouseEscaped') {
-            addEventFeed((e.username || 'Someone') + ' escaped!');
-        }
-        if (e.type === 'mouseDown') {
-            addEventFeed((e.username || 'A mouse') + ' was caught!');
-        }
-        if (e.type === 'powerup') {
-            if (e.playerId === socket.id) {
-                const msg = e.kind === 'heal' ? 'Healed!' : e.kind === 'speed' ? 'Speed boost!' : 'Rage!';
-                floatingTexts.push({ text: msg, x: (lastState && lastState.players[socket.id]) ? lastState.players[socket.id].x : 0, y: (lastState && lastState.players[socket.id]) ? lastState.players[socket.id].y : 0, t: 0 });
+        // Handle Selection Phase UI
+        const classScreen = document.getElementById('class-selection-screen');
+        const catWaitScreen = document.getElementById('cat-waiting-screen');
+        const p = state.players[myId];
+
+        if (state.status === 'selection') {
+            if (p && p.role === 'mouse') {
+                if (p.class === 0) {
+                    classScreen.classList.remove('hidden');
+                    populateClassGrid();
+                    document.getElementById('class-selection-title').innerText = `Choose Your Class (${Math.ceil(state.selectionTimeLeft)}s)`;
+                } else {
+                    classScreen.classList.add('hidden');
+                    catWaitScreen.classList.remove('hidden');
+                    catWaitScreen.querySelector('p').innerText = `Waiting for other mice...`;
+                }
+            } else if (p && p.role === 'cat') {
+                catWaitScreen.classList.remove('hidden');
+                catWaitScreen.querySelector('p').innerText = `Game starts in ${Math.ceil(state.selectionTimeLeft)}s`;
             }
-            addEventFeed(e.kind === 'heal' ? 'Heal picked up' : e.kind === 'speed' ? 'Speed picked up' : 'Rage picked up');
-        }
-    });
-}
-
-function addEventFeed(text) {
-    eventFeedList.unshift({ text, t: 0 });
-    if (eventFeedList.length > MAX_FEED_ITEMS) eventFeedList.pop();
-    const el = document.getElementById('event-feed');
-    if (el) {
-        el.innerHTML = eventFeedList.slice(0, MAX_FEED_ITEMS).map(e => '<div class="feed-item">' + e.text + '</div>').join('');
-    }
-}
-
-/* Ryan Mendez - Each frame: send movement and action to server. FR-10: keyboard used to move and interact; postcondition action relayed to server. */
-function update() {
-    const input = {
-        up: cursors.up.isDown || this.input.keyboard.keys[87].isDown,
-        down: cursors.down.isDown || this.input.keyboard.keys[83].isDown,
-        left: cursors.left.isDown || this.input.keyboard.keys[65].isDown,
-        right: cursors.right.isDown || this.input.keyboard.keys[68].isDown,
-        sprint: this.input.keyboard.keys[16].isDown,
-        action: this.input.keyboard.keys[32].isDown
-    };
-    socket.emit('playerInput', input);
-}
-
-function toIso(x, y) {
-    return { x: x - y, y: (x + y) / 2 };
-}
-
-function drawGrid(g) {
-    g.clear();
-    const gridSize = 2000;
-    const step = 100;
-    g.lineStyle(1, 0x444444, 0.3); 
-
-    for (let x = -gridSize/2; x <= gridSize/2; x += step) {
-        const s = toIso(x, -gridSize/2);
-        const e = toIso(x, gridSize/2);
-        g.moveTo(s.x, s.y);
-        g.lineTo(e.x, e.y);
-    }
-    for (let y = -gridSize/2; y <= gridSize/2; y += step) {
-        const s = toIso(-gridSize/2, y);
-        const e = toIso(gridSize/2, y);
-        g.moveTo(s.x, s.y);
-        g.lineTo(e.x, e.y);
-    }
-    g.strokePath();
-}
-
-function lerp(start, end, amt) {
-    return (1 - amt) * start + amt * end;
-}
-
-/* Ryan Mendez + An Nguyen - Renders game world: camera follow, obstacles, power-ups, terminals, players, exit, floating text. An Nguyen: scene/camera guard. FR-9: client shows map, characters, interactivity. */
-function drawGame(scene, state) {
-    if (!scene || !scene.cameras || !scene.cameras.main) return;
-    const myPlayer = state.players[socket.id];
-    if (!myPlayer) return;
-
-    dynamicGraphics.clear();
-    const isoCam = toIso(myPlayer.x, myPlayer.y);
-    scene.cameras.main.scrollX = lerp(scene.cameras.main.scrollX, isoCam.x - scene.cameras.main.width / 2, 0.1);
-    scene.cameras.main.scrollY = lerp(scene.cameras.main.scrollY, isoCam.y - scene.cameras.main.height / 2, 0.1);
-
-    // Obstacles
-    (state.obstacles || []).forEach(o => {
-        const iso = toIso(o.x, o.y);
-        const w = o.w * 0.7;
-        const h = o.h * 0.5;
-        dynamicGraphics.fillStyle(0x333333, 0.9);
-        dynamicGraphics.fillRect(iso.x - w/2, iso.y - h/2, w, h);
-        dynamicGraphics.lineStyle(2, 0x555555, 1);
-        dynamicGraphics.strokeRect(iso.x - w/2, iso.y - h/2, w, h);
-    });
-
-    // Power-ups (only when active)
-    (state.powerups || []).forEach(pu => {
-        if (pu.respawnAt > 0) return;
-        const iso = toIso(pu.x, pu.y);
-        const color = pu.type === 'heal' ? 0x00ff00 : pu.type === 'speed' ? 0x00aaff : 0xff6600;
-        dynamicGraphics.fillStyle(color, 0.9);
-        dynamicGraphics.fillCircle(iso.x, iso.y, 10);
-        dynamicGraphics.lineStyle(2, 0xffffff, 0.8);
-        dynamicGraphics.strokeCircle(iso.x, iso.y, 10);
-    });
-
-    // Terminals
-    state.terminals.forEach(t => {
-        const iso = toIso(t.x, t.y);
-        dynamicGraphics.fillStyle(t.completed ? 0x00ff00 : 0xffff00, 1);
-        dynamicGraphics.fillCircle(iso.x, iso.y, 15);
-        
-        if (!t.completed && t.progress > 0) {
-            dynamicGraphics.fillStyle(0x00ff00, 1);
-            dynamicGraphics.fillRect(iso.x - 20, iso.y - 30, 40 * (t.progress/100), 5);
-        }
-    });
-
-    // Cleanup Labels for disconnected/dead players
-    for (const id in scene.hpLabels) {
-        if (!state.players[id] || state.players[id].dead) {
-            scene.hpLabels[id].setVisible(false);
-        }
-    }
-
-    // Draw Players
-    for (const id in state.players) {
-        const serverP = state.players[id];
-        if (serverP.dead) continue;
-
-        // Init visual position if new
-        if (!visualPlayers[id]) visualPlayers[id] = { x: serverP.x, y: serverP.y };
-
-        // Interpolate position
-        visualPlayers[id].x = lerp(visualPlayers[id].x, serverP.x, 0.5);
-        visualPlayers[id].y = lerp(visualPlayers[id].y, serverP.y, 0.5);
-
-        const iso = toIso(visualPlayers[id].x, visualPlayers[id].y);
-        
-        // Draw Sprite
-        dynamicGraphics.fillStyle(serverP.role === 'cat' ? 0xff0000 : 0x00aaff, 1);
-        dynamicGraphics.fillCircle(iso.x, iso.y - 20, 12);
-        
-        // Draw Shadow
-        dynamicGraphics.fillStyle(0x000000, 0.5);
-        dynamicGraphics.fillEllipse(iso.x, iso.y, 12, 6);
-
-        // --- HP TEXT LOGIC ---
-        // Only show if Mouse AND HP < 100
-        if (serverP.role === 'mouse' && serverP.hp < 100) {
-            if (!scene.hpLabels[id]) {
-                // Create label if it doesn't exist
-                scene.hpLabels[id] = scene.add.text(0, 0, '', {
-                    fontSize: '14px',
-                    fontFamily: 'monospace',
-                    fill: '#ffffff',
-                    stroke: '#000000',
-                    strokeThickness: 3
-                }).setOrigin(0.5);
-            }
-            // Update Label
-            const label = scene.hpLabels[id];
-            label.setVisible(true);
-            label.setText(`HP: ${Math.floor(serverP.hp)}`);
-            label.setPosition(iso.x, iso.y - 50); // 50px above ground (30px above head)
-            label.setDepth(100); // Ensure it's on top
         } else {
-            // Hide label if full HP or Cat
-            if (scene.hpLabels[id]) scene.hpLabels[id].setVisible(false);
+            classScreen.classList.add('hidden');
+            catWaitScreen.classList.add('hidden');
+        }
+    });
+
+    socket.on('gameEvent', handleGameEvent);
+
+    /* An Nguyen - Terminal mini-game: show question overlay, error feedback, and completion. FR-15: puzzle/terminal interaction to unlock exit. */
+    socket.on('terminalQuestion', (data) => {
+        showTerminalOverlay(data);
+    });
+
+    socket.on('terminalError', (msg) => {
+        const fb = document.getElementById('terminal-feedback');
+        if (fb) fb.innerText = msg;
+    });
+
+    socket.on('terminalComplete', () => {
+        hideTerminalOverlay();
+        addEventFeed("Terminal Verified!");
+    });
+
+    myId = socket.id;
+
+    /* Ryan Mendez - Terminal overlay button and Enter key submit. FR-10: interact with objects. */
+    document.getElementById('terminal-submit-btn').onclick = submitTerminalAnswer;
+    document.getElementById('terminal-escape-btn').onclick = hideTerminalOverlay;
+    document.getElementById('terminal-input').onkeydown = (e) => {
+        if (e.key === 'Enter') submitTerminalAnswer();
+    };
+
+    /* Ryan Mendez - Start render and input loop. FR-9: client updates view. */
+    animate();
+}
+
+let classGridPopulated = false;
+/* An Nguyen - All 10 mouse classes + cat integration: definitions for selection phase (skills, descriptions, colors). FR-7: roles; extended. */
+const CLASSES = [
+    { id: 1, name: "Boost Speed", desc: "+20% speed for 5s (Skill)", color: "#FFFF00" },
+    { id: 2, name: "High Jump", desc: "Jump over 1 wall (Skill) [10s CD]", color: "#90EE90" },
+    { id: 3, name: "Invisible", desc: "Invisible to Cat for 10s (Skill)", color: "#FFFFFF" },
+    { id: 4, name: "Money Token", desc: "Spawn coins around you (Skill)", color: "#FFD700" },
+    { id: 5, name: "Support", desc: "Random buff for 5s (Skill)", color: "#DDA0DD" },
+    { id: 6, name: "Into Vent", desc: "Phase through 2 walls (Skill) [35s CD]", color: "#8B4513" },
+    { id: 7, name: "Puzzle Prof", desc: "Terminals take 3 Qs instead of 5 [60s CD]", color: "#FFA500" },
+    { id: 8, name: "Pull Player", desc: "Pull nearest player to you [40s CD]", color: "#04d9ff" },
+    { id: 9, name: "Diplomouse", desc: "Random global event: Spd or Joker", color: "#FFC0CB" },
+    { id: 10, name: "Lazy", desc: "Does nothing. Terminals take 12 Qs.", color: "#808080" }
+];
+
+/* An Nguyen - Fills class selection grid with cards; emit selectClass on click. FR-6: pre-game selection phase. */
+function populateClassGrid() {
+    if (classGridPopulated) return;
+    const grid = document.getElementById('class-grid');
+    grid.innerHTML = '';
+    CLASSES.forEach(c => {
+        const card = document.createElement('div');
+        card.className = 'class-card';
+        card.dataset.class = c.id;
+        card.innerHTML = `<h3>${c.name}</h3><p>${c.desc}</p>`;
+        card.onclick = () => {
+            socket.emit('selectClass', c.id);
+            document.getElementById('class-selection-screen').classList.add('hidden');
+        };
+        grid.appendChild(card);
+    });
+    classGridPopulated = true;
+}
+
+let isTerminalOpen = false;
+let currentTerminalId = null;
+
+/* An Nguyen - Shows terminal repair overlay with question and progress. FR-15: puzzle interaction for exit. */
+function showTerminalOverlay(data) {
+    isTerminalOpen = true;
+    currentTerminalId = data.terminalId;
+    document.getElementById('terminal-overlay').classList.remove('hidden');
+    document.getElementById('terminal-progress').innerText = `Question ${data.questionIndex}/${data.total}`;
+    document.getElementById('terminal-question-text').innerText = `${data.q} = ?`;
+    document.getElementById('terminal-input').value = '';
+    document.getElementById('terminal-input').focus();
+    document.getElementById('terminal-feedback').innerText = '';
+
+    // Clear movement keys to stop moving
+    keys.w = keys.a = keys.s = keys.d = keys.shift = keys.space = false;
+}
+
+/* An Nguyen - Hides terminal overlay and refocuses game. FR-10: return to game after interaction. */
+function hideTerminalOverlay() {
+    isTerminalOpen = false;
+    currentTerminalId = null;
+    document.getElementById('terminal-overlay').classList.add('hidden');
+    document.getElementById('game-container').focus();
+}
+
+/* An Nguyen - Sends answer to server for terminal question. FR-15: puzzle completion. */
+function submitTerminalAnswer() {
+    if (!currentTerminalId) return;
+    const val = document.getElementById('terminal-input').value;
+    if (val === '') return;
+    socket.emit('submitAnswer', { terminalId: currentTerminalId, answer: val });
+}
+
+/* Ryan Mendez - Handles game events: catHit, terminalComplete, exitOpen, escape, mouseDown, powerup, diplomouse. FR-13/14: players informed on catch. */
+function handleGameEvent(e) {
+    if (e.type === 'catHit' && e.targetId === socket.id) {
+        addEventFeed('You were hit! -' + Math.round(e.damage));
+        shakeCamera();
+        // If hit while in terminal, close it?
+        if (isTerminalOpen) hideTerminalOverlay();
+    }
+    if (e.type === 'terminalComplete') addEventFeed(`Terminal repaired! (${e.count || 0}/5)`);
+    if (e.type === 'exitOpen') addEventFeed('Exit opened! Run to center!');
+    if (e.type === 'mouseEscaped') addEventFeed(`${e.username || 'Someone'} escaped!`);
+    if (e.type === 'mouseDown') addEventFeed(`${e.username || 'A mouse'} was caught!`);
+    if (e.type === 'powerup') addEventFeed(`${e.kind} picked up`);
+    if (e.type === 'diplomouse') addEventFeed(`🐭 ${e.msg}`);
+}
+
+/* An Nguyen - Prepends event message to feed; keeps last 5, auto-removes after 5s. FR-13/14: all players informed. */
+function addEventFeed(text) {
+    const feed = document.getElementById('event-feed');
+    const div = document.createElement('div');
+    div.innerText = text;
+    div.className = 'feed-item';
+    feed.prepend(div);
+    if (feed.children.length > 5) feed.removeChild(feed.lastChild);
+    setTimeout(() => div.remove(), 5000);
+}
+
+/* Ryan Mendez - Syncs 3D scene with server state: players, obstacles, terminals, powerups, exit, minimap. FR-9: client shows map and characters; FR-12: reset view from state. */
+function updateGame(state) {
+    /* Remove dead/disconnected players */
+    for (let id in players) {
+        if (!state.players[id] || state.players[id].dead || state.players[id].escaped) {
+            scene.remove(players[id].mesh);
+            delete players[id];
         }
     }
-    
-    // Exit (pulsing when open)
+
+    /* Add/Update players */
+    for (let id in state.players) {
+        const p = state.players[id];
+        if (p.dead || p.escaped) continue;
+
+        if (!players[id]) {
+            /* An Nguyen - 3D player meshes: sphere (cat), box (mouse); part of 2D-to-3D migration. FR-9: characters in game world. */
+            const geo = p.role === 'cat' ? new THREE.SphereGeometry(20, 32, 32) : new THREE.BoxGeometry(25, 25, 25);
+            const mat = p.role === 'cat' ? MAT_CAT : MAT_MOUSE;
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+            players[id] = { mesh: mesh, role: p.role };
+
+            // Add a simple shadow blob or rely on light shadow
+        }
+
+        /* An Nguyen - Invisible skill: hide from cat view or show ghost to others. FR-9: character visibility. */
+        if (p.invisibleUntil && p.invisibleUntil > Date.now()) {
+            if (lastState && lastState.players[myId] && lastState.players[myId].role === 'cat') {
+                if (players[id]) players[id].mesh.visible = false;
+                continue;
+            } else if (players[id]) {
+                players[id].mesh.material.transparent = true;
+                players[id].mesh.material.opacity = 0.3;
+            }
+        } else if (players[id]) {
+            players[id].mesh.visible = true;
+            players[id].mesh.material.transparent = false;
+            players[id].mesh.material.opacity = 1.0;
+        }
+
+        /* Ryan Mendez - Lerp player position and camera follow for local player. FR-9: observe game world. */
+        const mesh = players[id].mesh;
+        mesh.position.x = lerp(mesh.position.x, p.x, 0.2);
+        mesh.position.z = lerp(mesh.position.z, p.y, 0.2); // Server Y is 3D Z
+        mesh.position.y = 15; // Ground level offset
+
+        if (id === myId) {
+            const targetX = mesh.position.x;
+            const targetZ = mesh.position.z + 400; // Offset Z for angled view
+            const targetY = 600; // Height
+
+            camera.position.x = lerp(camera.position.x, targetX, 0.1);
+            camera.position.z = lerp(camera.position.z, targetZ, 0.1);
+            camera.position.y = lerp(camera.position.y, targetY, 0.1);
+            camera.lookAt(mesh.position.x, 0, mesh.position.z);
+        }
+    }
+
+    /* An Nguyen - 3D wall meshes with wall texture (floor/wall design); built once from state.obstacles. PDF: FR-8 (map contains obstacles). */
+    if (obstacles.length === 0 && state.obstacles.length > 0) {
+        state.obstacles.forEach(o => {
+            const h = 60; // Wall height
+            const geo = new THREE.BoxGeometry(o.w, h, o.h); // o.h is Z depth in 3D
+            const wallMat = window.MAT_WALL_TEX || MAT_WALL;
+            // Clone material to handle different texture repeats based on wall size? 
+            // For now, world-mapped texture or simple repeat is fine.
+            const mesh = new THREE.Mesh(geo, wallMat);
+            mesh.position.set(o.x, h / 2, o.y);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+            obstacles.push(mesh);
+        });
+    }
+
+    /* Ryan Mendez - Sync terminal meshes and completion color. Short: interactive escapes. PDF: FR-8, FR-15 (terminals). */
+    if (terminals.length !== state.terminals.length) {
+        terminals.forEach(t => scene.remove(t.mesh));
+        terminals = [];
+        state.terminals.forEach(t => {
+            const geo = new THREE.CylinderGeometry(15, 15, 50, 16);
+            const mesh = new THREE.Mesh(geo, MAT_TERM_INC);
+            mesh.position.set(t.x, 25, t.y);
+            mesh.castShadow = true;
+            scene.add(mesh);
+            terminals.push({ id: t.id, mesh: mesh });
+        });
+    }
+
+    state.terminals.forEach(t => {
+        const term = terminals.find(x => x.id === t.id);
+        if (term) {
+            term.mesh.material = t.completed ? MAT_TERM_COM : MAT_TERM_INC;
+            if (t.completed) {
+                term.mesh.position.y = 10; // Sink when done
+            }
+        }
+    });
+
+    /* An Nguyen - Power-up/boost system: 3D powerup meshes (heal, speed, rage) from state; float animation. FR-8: map elements. */
+    powerups.forEach(p => scene.remove(p));
+    powerups = [];
+    (state.powerups || []).forEach(p => {
+        if (p.respawnAt > 0) return;
+        const color = p.type === 'heal' ? 0x00ff00 : p.type === 'speed' ? 0x00aaff : 0xff6600;
+        const geo = new THREE.OctahedronGeometry(10);
+        const mat = new THREE.MeshPhongMaterial({ color: color, emissive: color, emissiveIntensity: 0.5 });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(p.x, 20 + Math.sin(Date.now() / 500) * 5, p.y); // Float animation
+        mesh.rotation.y = Date.now() / 1000;
+        scene.add(mesh);
+        powerups.push(mesh);
+    });
+
+    /* Ryan Mendez - When exit open, draw ring marker and green light at center. FR-15: door of escape opened; FR-16: escape route. */
     if (state.exitOpen) {
-        const isoExit = toIso(0, 0);
-        const pulse = 0.25 + 0.2 * Math.sin(Date.now() / 300);
-        dynamicGraphics.fillStyle(0x00ff00, pulse);
-        dynamicGraphics.fillCircle(isoExit.x, isoExit.y, 150);
-        dynamicGraphics.lineStyle(3, 0x00ff88, 0.6);
-        dynamicGraphics.strokeCircle(isoExit.x, isoExit.y, 150);
+        if (!scene.getObjectByName('exitMarker')) {
+            const geo = new THREE.RingGeometry(100, 120, 32);
+            const mesh = new THREE.Mesh(geo, MAT_EXIT_OPEN);
+            mesh.name = 'exitMarker';
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.position.set(0, 5, 0);
+            scene.add(mesh);
+
+            const light = new THREE.PointLight(0x00ff00, 1, 500);
+            light.position.set(0, 50, 0);
+            scene.add(light);
+        }
     }
 
-    // Floating damage/pickup texts (rise from player)
-    for (let i = floatingTexts.length - 1; i >= 0; i--) {
-        const ft = floatingTexts[i];
-        ft.t++;
-        if (ft.t > 90) {
-            if (ft.obj) ft.obj.destroy();
-            floatingTexts.splice(i, 1);
-            continue;
-        }
-        const fx = ft.x !== undefined ? ft.x : myPlayer.x;
-        const fy = ft.y !== undefined ? ft.y : myPlayer.y;
-        const iso = toIso(fx, fy);
-        const screenY = iso.y - 40 - ft.t * 0.5;
-        const alpha = 1 - ft.t / 90;
-        if (!ft.obj) {
-            ft.obj = scene.add.text(iso.x, screenY, ft.text, {
-                fontSize: '20px',
-                fontFamily: 'Luckiest Guy',
-                color: ft.text.indexOf('-') === 0 ? '#ff5555' : '#88ff88',
-                stroke: '#000',
-                strokeThickness: 2
-            }).setOrigin(0.5);
-        }
-        ft.obj.setPosition(iso.x, screenY);
-        ft.obj.setAlpha(alpha);
-        ft.obj.setVisible(true);
-    }
-
-    /* An Nguyen - Top-down minimap: players, terminals, obstacles, exit. */
+    /* An Nguyen - Draw 2D minimap with walls and players. FR-9: client shows map. */
     drawMinimap(state);
 }
 
-/* An Nguyen - Draws minimap canvas with players (cat/mice), terminals, obstacles, exit zone. */
-function drawMinimap(state) {
-    const canvas = document.getElementById('minimap');
-    if (!canvas || !state.players[socket.id]) return;
-    const ctx = canvas.getContext('2d');
-    const w = canvas.width, h = canvas.height;
-    const half = MAP_SIZE / 2;
-    const scale = (w - 10) / MAP_SIZE;
-    const cx = w / 2, cy = h / 2;
-
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-    ctx.strokeRect(1, 1, w - 2, h - 2);
-
-    const toMinimap = (gx, gy) => ({
-        x: cx + gx * scale,
-        y: cy - gy * scale
-    });
-
-    (state.obstacles || []).forEach(o => {
-        const p = toMinimap(o.x, o.y);
-        ctx.fillStyle = 'rgba(80,80,80,0.8)';
-        ctx.fillRect(p.x - (o.w * scale) / 2, p.y - (o.h * scale) / 2, o.w * scale, o.h * scale);
-    });
-
-    state.terminals.forEach(t => {
-        const p = toMinimap(t.x, t.y);
-        ctx.fillStyle = t.completed ? '#0a0' : '#aa0';
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-        ctx.fill();
-    });
-
-    if (state.exitOpen) {
-        const p = toMinimap(0, 0);
-        ctx.fillStyle = 'rgba(0,255,100,0.5)';
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
-    for (const id in state.players) {
-        const p = state.players[id];
-        if (p.dead && !p.escaped) continue;
-        const pos = toMinimap(p.x, p.y);
-        ctx.fillStyle = p.role === 'cat' ? '#f44' : p.escaped ? '#888' : '#4af';
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, id === socket.id ? 4 : 3, 0, Math.PI * 2);
-        ctx.fill();
-        if (id === socket.id) {
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-        }
-    }
-}
-
-/* Ryan Mendez + An Nguyen - Updates HUD: role, HP, timer, terminals, sprint; An Nguyen: buff indicators (speed/rage). FR-9: observe game world and character. */
+/* Ryan Mendez - Updates HUD: HP, role, controls hint, timer, terminals, sprint/skill bars. FR-9: player observes state. */
 function updateUI(state) {
     const p = state.players[socket.id];
-    if(!p) return;
-    document.getElementById('role-display').innerText = `Role: ${p.role.toUpperCase()}`;
+    if (!p) return;
     document.getElementById('hp-bar').innerText = `HP: ${Math.floor(p.hp)}`;
+
+    let roleText = `Role: ${p.role.toUpperCase()}`;
+    if (p.role === 'mouse' && p.class > 0) {
+        const cls = CLASSES.find(c => c.id === p.class);
+        if (cls) roleText += ` - ${cls.name}`;
+    }
+    document.getElementById('role-display').innerText = roleText;
+
+    const hintText = p.role === 'cat'
+        ? 'WASD move · Shift sprint · Space attack'
+        : 'WASD move · Shift sprint · Space interact · F skill';
+    document.getElementById('controls-hint').innerText = hintText;
+
     document.getElementById('timer-display').innerText = `Time: ${Math.floor(state.timeLeft)}`;
-    document.getElementById('terminals-left').innerText = `Terminals: ${state.terminals.filter(t=>t.completed).length}/5`;
+    document.getElementById('terminals-left').innerText = `Terminals: ${state.terminals.filter(t => t.completed).length}/5`;
 
     const sprintEl = document.getElementById('sprint-bar');
     if (p.sprintCooldown > 0) {
@@ -361,16 +425,148 @@ function updateUI(state) {
         sprintEl.style.color = 'lime';
     }
 
-    const now = Date.now();
-    const buffEl = document.getElementById('buff-indicators');
-    if (buffEl) {
-        const parts = [];
-        if (p.speedBoostUntil && now < p.speedBoostUntil) {
-            parts.push('<span class="buff speed">Speed ' + Math.ceil((p.speedBoostUntil - now) / 1000) + 's</span>');
+    const skillEl = document.getElementById('skill-bar');
+    if (p.class > 0) { // Has a skill
+        if (p.skillCooldown > 0) {
+            skillEl.innerText = `CD: ${Math.ceil(p.skillCooldown)}s`;
+            skillEl.style.color = 'red';
+        } else {
+            skillEl.innerText = `Skill Ready (F)`;
+            skillEl.style.color = 'lime';
         }
-        if (p.rageUntil && now < p.rageUntil) {
-            parts.push('<span class="buff rage">Rage ' + Math.ceil((p.rageUntil - now) / 1000) + 's</span>');
+    } else {
+        skillEl.innerText = `No Skill`;
+        skillEl.style.color = 'gray';
+    }
+}
+
+/* Ryan Mendez - Animation loop: emit playerInput to server and render. FR-10: movement/action relayed to server. */
+function animate() {
+    animationId = requestAnimationFrame(animate);
+
+    if (!isTerminalOpen && myId && lastState && lastState.players[myId] && !lastState.players[myId].dead) {
+        const input = {
+            up: keys.w,
+            down: keys.s,
+            left: keys.a,
+            right: keys.d,
+            sprint: keys.shift,
+            action: keys.space,
+            activeSkill: keys.f
+        };
+        socket.emit('playerInput', input);
+    }
+
+    renderer.render(scene, camera);
+}
+
+/* Ryan Mendez - Key down: set movement/action flags; Space triggers interactTerminal; Escape closes terminal. FR-10: keyboard input. */
+function onKeyDown(e) {
+    if (isTerminalOpen && e.code !== 'Escape') return;
+
+    if (e.code === 'KeyW' || e.code === 'ArrowUp') keys.w = true;
+    if (e.code === 'KeyS' || e.code === 'ArrowDown') keys.s = true;
+    if (e.code === 'KeyA' || e.code === 'ArrowLeft') keys.a = true;
+    if (e.code === 'KeyD' || e.code === 'ArrowRight') keys.d = true;
+    if (e.code === 'ShiftLeft') keys.shift = true;
+    if (e.code === 'KeyF') keys.f = true;
+
+    if (e.code === 'Space') {
+        keys.space = true;
+        socket.emit('interactTerminal');
+    }
+
+    if (e.code === 'Escape') {
+        if (isTerminalOpen) hideTerminalOverlay();
+    }
+}
+
+/* Ryan Mendez - Key up: clear movement and action flags. FR-10: input handling. */
+function onKeyUp(e) {
+    if (e.code === 'KeyW' || e.code === 'ArrowUp') keys.w = false;
+    if (e.code === 'KeyS' || e.code === 'ArrowDown') keys.s = false;
+    if (e.code === 'KeyA' || e.code === 'ArrowLeft') keys.a = false;
+    if (e.code === 'KeyD' || e.code === 'ArrowRight') keys.d = false;
+    if (e.code === 'ShiftLeft') keys.shift = false;
+    if (e.code === 'Space') keys.space = false;
+    if (e.code === 'KeyF') keys.f = false;
+}
+
+/* Ryan Mendez - Resize camera aspect and renderer size. FR-9: client view. */
+function onWindowResize() {
+    if (camera && renderer) {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+}
+
+/* Ryan Mendez - Linear interpolation for smooth position updates. FR-9: smooth view. */
+function lerp(start, end, amt) {
+    return (1 - amt) * start + amt * end;
+}
+
+/* An Nguyen - Brief camera shake on cat hit. FR-13/14: feedback when caught. */
+function shakeCamera() {
+    const originalPos = camera.position.clone();
+    let duration = 200;
+    const start = Date.now();
+
+    function shake() {
+        const now = Date.now();
+        const elapsed = now - start;
+        if (elapsed < duration) {
+            const intensity = 15 * (1 - elapsed / duration);
+            camera.position.x = originalPos.x + (Math.random() - 0.5) * intensity;
+            camera.position.z = originalPos.z + (Math.random() - 0.5) * intensity;
+            requestAnimationFrame(shake);
+        } // Positions restore naturally by update loop
+    }
+    shake();
+}
+
+/* An Nguyen - Draws 2D minimap: walls, players (cat/mouse), hide invisible from cat. FR-9: client shows map. */
+function drawMinimap(state) {
+    const canvas = document.getElementById('minimap');
+    if (!canvas || !state.players[socket.id]) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    const scale = (w - 10) / 2000;
+    const cx = w / 2, cy = h / 2;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, w, h);
+
+    // Draw walls on minimap
+    ctx.fillStyle = '#555';
+    (state.obstacles || []).forEach(o => {
+        ctx.fillRect(cx + (o.x - o.w / 2) * scale, cy + (o.y - o.h / 2) * scale, o.w * scale, o.h * scale);
+    });
+
+    // Players interaction
+    for (const id in state.players) {
+        const p = state.players[id];
+        if (p.dead && !p.escaped) continue;
+
+        let shouldHide = false;
+        if (p.invisibleUntil && p.invisibleUntil > Date.now()) {
+            if (lastState && lastState.players[myId] && lastState.players[myId].role === 'cat') {
+                shouldHide = true;
+            }
         }
-        buffEl.innerHTML = parts.join(' ');
+        if (shouldHide) continue;
+
+        const x = cx + p.x * scale;
+        const y = cy + p.y * scale;
+
+        ctx.fillStyle = p.role === 'cat' ? '#f00' : '#0af';
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (id === socket.id) {
+            ctx.strokeStyle = '#fff';
+            ctx.stroke();
+        }
     }
 }

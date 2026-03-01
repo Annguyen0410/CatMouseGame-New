@@ -1,7 +1,7 @@
 /**
- * config.js - Game and server constants. Assignment 4 PDF: Section 3 - single source of truth for server/game params.
- * Ryan Mendez - Core game constants (players 2-5, map, terminals, attack, sprint). FR-4: room parameters 2-5 players; FR-8: map.
- * An Nguyen - Power-up and obstacle constants. FR-8: map with obstacles; gameplay extensions.
+ * config.js - Game and server constants. Assignment 4 PDF: Section 3.
+ * Ryan Mendez - Core constants (players 2-5, map, terminals, attack, sprint). Short: room/game params. PDF: FR-4 (2-5 players), FR-8 (map).
+ * An Nguyen - Power-up and obstacle constants. Short: map obstacles, gameplay. PDF: FR-8 (map with obstacles).
  */
 module.exports = {
   PORT: 3030,

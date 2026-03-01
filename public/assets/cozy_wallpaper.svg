@@ -1,0 +1,19 @@
+<svg width="256" height="256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <pattern id="wallpaper" x="0" y="0" width="256" height="256" patternUnits="userSpaceOnUse">
+      <rect width="256" height="256" fill="#F5F5DC"/> <!-- Beige -->
+      <!-- Scale pattern up from 100 to 256 -->
+      <path d="M0,0 L256,256 M256,0 L0,256" stroke="#E0C0A0" stroke-width="4"/>
+      <circle cx="128" cy="128" r="25" fill="#D2B48C" opacity="0.5"/>
+      <circle cx="0" cy="0" r="25" fill="#D2B48C" opacity="0.5"/>
+      <circle cx="256" cy="0" r="25" fill="#D2B48C" opacity="0.5"/>
+      <circle cx="0" cy="256" r="25" fill="#D2B48C" opacity="0.5"/>
+      <circle cx="256" cy="256" r="25" fill="#D2B48C" opacity="0.5"/>
+      <circle cx="128" cy="0" r="15" fill="#D2B48C" opacity="0.3"/>
+      <circle cx="128" cy="256" r="15" fill="#D2B48C" opacity="0.3"/>
+      <circle cx="0" cy="128" r="15" fill="#D2B48C" opacity="0.3"/>
+      <circle cx="256" cy="128" r="15" fill="#D2B48C" opacity="0.3"/>
+    </pattern>
+  </defs>
+  <rect width="256" height="256" fill="url(#wallpaper)"/>
+</svg>

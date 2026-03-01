@@ -13,7 +13,7 @@ db.serialize(() => {
   db.run("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, coins INTEGER DEFAULT 0)");
 });
 
-/* Ryan Mendez - Validates credentials; supports bcrypt or legacy plain-text (upgrades on login). FR-2: precondition username/email not already used. */
+/* Ryan Mendez - Validates credentials; bcrypt or legacy plain-text (upgrade on login). Short: login. PDF: FR-2 (account), FR-1 (login). */
 function loginUser(username, password, callback) {
   db.get("SELECT * FROM users WHERE username = ?", [username], (err, row) => {
     if (err) return callback(err, null);
@@ -37,8 +37,7 @@ function loginUser(username, password, callback) {
   });
 }
 
-/* Ryan Mendez - Hashes password and inserts new user. FR-2: new user account established and registered in database. */
-/* Ryan Mendez - Hashes password and inserts new user. FR-2: new user account established and registered in database. */
+/* Ryan Mendez - Hashes password and inserts new user. Short: register in DB. PDF: FR-2 (new user registered in database). */
 function registerUser(username, password, callback) {
   bcrypt.hash(password, SALT_ROUNDS, (err, hash) => {
     if (err) return callback(err, null);

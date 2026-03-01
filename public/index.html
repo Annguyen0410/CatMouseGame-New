@@ -1,17 +1,19 @@
 <!DOCTYPE html>
-<!-- Assignment 4 PDF: FR-1 starting page with main menu (Login, register, Settings); FR-20 audio/custom control menu. -->
+<!-- Assignment 4 PDF: FR-1 starting page; FR-20 audio/custom control. -->
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cat & Mouse Game</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
+
 <body>
 
-    <!-- Ryan Mendez - Main menu: Start (login/register), Settings. FR-1: principal menu with Login, register, settings. -->
+    <!-- Ryan Mendez - Main menu with Start and Settings. Short: principal menu. PDF: FR-1 (main menu with Login, register, settings). -->
     <div id="main-menu" role="main">
         <h1 class="game-title">Cat & Mouse Game</h1>
 
@@ -22,15 +24,17 @@
 
         <div id="panel-login" class="slide-panel hidden-right" aria-label="Login form">
             <h2>Login</h2>
-            <!-- An Nguyen - Form wrapper for login so password field is in a form (fixes DOM hint). FR-1: login. -->
+            <!-- An Nguyen - Login form with username/password. Short: form wrapper for login. PDF: FR-1 (login). -->
             <form id="login-form" aria-describedby="login-msg">
                 <div class="form-group">
                     <label for="username">Username:</label>
-                    <input type="text" id="username" placeholder="Enter username" autocomplete="username" aria-describedby="login-msg">
+                    <input type="text" id="username" placeholder="Enter username" autocomplete="username"
+                        aria-describedby="login-msg">
                 </div>
                 <div class="form-group">
                     <label for="password">Password:</label>
-                    <input type="password" id="password" placeholder="Enter password" autocomplete="current-password" aria-describedby="login-msg">
+                    <input type="password" id="password" placeholder="Enter password" autocomplete="current-password"
+                        aria-describedby="login-msg">
                 </div>
                 <button type="submit" id="login-submit-btn" aria-describedby="login-msg">Enter</button>
                 <p class="login-hint">First time? Use any username and password to register.</p>
@@ -38,7 +42,7 @@
             </form>
         </div>
 
-        <!-- Ryan Mendez - Settings: music and SFX volume. FR-20: user can customize volume of music and sound effects. -->
+        <!-- Ryan Mendez - Settings panel with music and SFX volume sliders. Short: audio/custom control. PDF: FR-20 (volume of music and sound effects). -->
         <div id="panel-settings" class="slide-panel hidden-right" aria-label="Settings">
             <h2>Settings</h2>
             <div class="setting-row">
@@ -53,7 +57,7 @@
         </div>
     </div>
 
-    <!-- Ryan Mendez - Lobby: create room, refresh list, player list, timer. FR-3: lobby displays rooms, players; FR-4 create, FR-5 join. -->
+    <!-- Ryan Mendez - Lobby screen: create room, refresh list, player list, timer. Short: multiplayer lobby. PDF: FR-3 (lobby), FR-4 (form room), FR-5 (join room). -->
     <div id="lobby-screen" class="hidden" role="region" aria-label="Lobby">
         <h1>Lobby Selection</h1>
         <div class="lobby-controls">
@@ -66,35 +70,50 @@
         </div>
     </div>
 
-    <!-- Ryan Mendez - In-game HUD: HP, sprint, role, timer, terminals. FR-9: client shows map, characters, interactivity. An Nguyen: controls-hint, buff-indicators, event-feed, minimap. -->
+    <!-- Ryan Mendez - In-game HUD base. An Nguyen - Glassmorphism panels, controls-hint, buff-indicators (power-up/boost), event-feed, minimap; for 3D client. PDF: FR-9 (client shows map, characters, interactivity). -->
     <div id="game-ui" class="hidden">
-        <div id="stats">
-            <div id="hp-bar">HP: 100</div>
-            <div id="sprint-bar">Sprint Ready</div>
-            <div id="role-display"></div>
-            <div id="controls-hint">WASD move · Shift sprint · Space action</div>
+        <div id="stats" class="hud-panel glass-panel">
+            <div class="stat-item"><span class="stat-icon">❤️</span><span id="hp-bar">HP: 100</span></div>
+            <div class="stat-item"><span class="stat-icon">⚡</span><span id="sprint-bar">Sprint Ready</span></div>
+            <div class="stat-item"><span class="stat-icon">🎭</span><span id="role-display">Role: MOUSE</span></div>
+            <div id="controls-hint" class="hint-text">WASD move · Shift sprint · Space action</div>
             <div id="buff-indicators"></div>
         </div>
-        <div id="top-center-ui">
-            <div id="timer-display"></div>
-            <div id="terminals-left">Terminals: 0/5</div>
+        <div id="top-center-ui" class="hud-panel glass-panel">
+            <div class="stat-item"><span class="stat-icon">⏱️</span><span id="timer-display">Time: 0</span></div>
+            <div class="stat-item"><span class="stat-icon">💻</span><span id="terminals-left">Terminals: 0/5</span>
+            </div>
         </div>
         <div id="event-feed" aria-live="polite"></div>
-        <div id="minimap-container">
+        <div id="minimap-container" class="glass-panel">
             <canvas id="minimap" width="140" height="140"></canvas>
         </div>
     </div>
-    
-    <!-- Ryan Mendez - Game over screen: winner text, back to lobby. FR-18: display result (win/loss) and return to lobby. -->
+
+    <!-- Ryan Mendez - Game over screen with winner text and back to lobby button. Short: display result and return to lobby. PDF: FR-18 (result and back to lobby). -->
     <div id="game-over-screen" class="hidden" role="alertdialog" aria-labelledby="winner-text">
         <h1 id="winner-text"></h1>
         <button type="button" id="game-over-back">Back to Lobby</button>
     </div>
 
-    <!-- Ryan Mendez - Phaser canvas container. FR-9: client displays game world. Section 3: Phaser.js for rendering. -->
+    <!-- An Nguyen - Terminal repair overlay: math questions for puzzle. Short: puzzle interaction for exit. PDF: FR-15 (Rats complete puzzles to unlock exit). -->
+    <div id="terminal-overlay" class="hidden" role="dialog" aria-label="Terminal Repair">
+        <h2>Repair Terminal</h2>
+        <div id="terminal-question-container">
+            <p id="terminal-progress">Question 1/5</p>
+            <p id="terminal-question-text">12 + 5 = ?</p>
+            <input type="number" id="terminal-input" placeholder="Answer" autocomplete="off">
+            <button type="button" id="terminal-submit-btn">Submit</button>
+            <p id="terminal-feedback"></p>
+        </div>
+        <button type="button" id="terminal-escape-btn">Escape (Close)</button>
+    </div>
+
+    <!-- Ryan Mendez - Game world container (Three.js canvas). Short: client displays game world. PDF: FR-9 (client shows map, characters); Section 3 (client-side rendering). -->
     <div id="game-container"></div>
 
     <script src="js/main.js"></script>
     <script src="js/game.js"></script>
 </body>
+
 </html>
