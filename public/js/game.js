@@ -54,12 +54,12 @@ function startGame(initialState) {
 
     /* An Nguyen - Real textures for floor and walls (wood floor PNG, wall texture PNG); replaced flat/SVG look. FR-8: map with obstacles. */
     const loader = new THREE.TextureLoader();
-    const woodTexture = loader.load('assets/wood_floor.png');
+    const woodTexture = loader.load('assets/floor.jpg');
     woodTexture.wrapS = THREE.RepeatWrapping;
     woodTexture.wrapT = THREE.RepeatWrapping;
     woodTexture.repeat.set(15, 15);
 
-    const wallTexture = loader.load('assets/wall_texture.png');
+    const wallTexture = loader.load('assets/wall.png');
     wallTexture.wrapS = THREE.RepeatWrapping;
     wallTexture.wrapT = THREE.RepeatWrapping;
 
@@ -236,14 +236,30 @@ function handleGameEvent(e) {
     if (e.type === 'catHit' && e.targetId === socket.id) {
         addEventFeed('You were hit! -' + Math.round(e.damage));
         shakeCamera();
+        if (window.AudioManager) window.AudioManager.playSFX('assets/sounds/cat_hit.mp3');
         // If hit while in terminal, close it?
         if (isTerminalOpen) hideTerminalOverlay();
     }
-    if (e.type === 'terminalComplete') addEventFeed(`Terminal repaired! (${e.count || 0}/5)`);
-    if (e.type === 'exitOpen') addEventFeed('Exit opened! Run to center!');
-    if (e.type === 'mouseEscaped') addEventFeed(`${e.username || 'Someone'} escaped!`);
-    if (e.type === 'mouseDown') addEventFeed(`${e.username || 'A mouse'} was caught!`);
-    if (e.type === 'powerup') addEventFeed(`${e.kind} picked up`);
+    if (e.type === 'terminalComplete') {
+        addEventFeed(`Terminal repaired! (${e.count || 0}/5)`);
+        if (window.AudioManager) window.AudioManager.playSFX('assets/sounds/terminal_complete.mp3');
+    }
+    if (e.type === 'exitOpen') {
+        addEventFeed('Exit opened! Run to center!');
+        if (window.AudioManager) window.AudioManager.playSFX('assets/sounds/exit_open.mp3');
+    }
+    if (e.type === 'mouseEscaped') {
+        addEventFeed(`${e.username || 'Someone'} escaped!`);
+        if (window.AudioManager) window.AudioManager.playSFX('assets/sounds/mouse_escape.mp3');
+    }
+    if (e.type === 'mouseDown') {
+        addEventFeed(`${e.username || 'A mouse'} was caught!`);
+        if (window.AudioManager) window.AudioManager.playSFX('assets/sounds/mouse_caught.mp3');
+    }
+    if (e.type === 'powerup') {
+        addEventFeed(`${e.kind} picked up`);
+        if (window.AudioManager) window.AudioManager.playSFX('assets/sounds/powerup_pickup.mp3');
+    }
     if (e.type === 'diplomouse') addEventFeed(`🐭 ${e.msg}`);
 }
 

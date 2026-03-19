@@ -45,7 +45,7 @@ function createGameState(lobbyId, playerIds) {
     powerups: [],
     exitOpen: false,
     timeLeft: cfg.GAME_TIME_SEC,
-    selectionTimeLeft: 15,
+    selectionTimeLeft: 35,
     status: 'selection',
     winner: null
   };
@@ -499,10 +499,10 @@ io.on('connection', (socket) => {
     // Movement
     let dx = 0;
     let dy = 0;
-    if (input.up) { dx -= 1; dy -= 1; }
-    if (input.down) { dx += 1; dy += 1; }
-    if (input.left) { dx -= 1; dy += 1; }
-    if (input.right) { dx += 1; dy -= 1; }
+    if (input.up) { dy -= 1; }
+    if (input.down) { dy += 1; }
+    if (input.left) { dx -= 1; }
+    if (input.right) { dx += 1; }
 
     if (dx !== 0 || dy !== 0) {
       const length = Math.hypot(dx, dy);

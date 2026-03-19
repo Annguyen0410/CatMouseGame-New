@@ -178,10 +178,73 @@ socket.on('lobbyTimer', (time) => {
     if (timerEl) timerEl.textContent = 'Starting in: ' + time;
 });
 
+/* An Nguyen - Audio Manager: plays BGM and SFX with volume control synced to settings sliders. PDF: FR-20 (audio volume). */
+const AudioManager = {
+    bgm: null,
+    sfxVolume: 0.5,
+    bgmVolume: 0.5,
+    menuMusicSrc: 'assets/sounds/menu_background.mp3',
+    gameMusicSrc: 'assets/sounds/gameplay_background.mp3',
+    _started: false,
+
+    init() {
+        this.bgmVolume = document.getElementById('music-vol').value / 100;
+        this.sfxVolume = document.getElementById('sfx-vol').value / 100;
+
+        document.getElementById('music-vol').oninput = (e) => {
+            this.bgmVolume = e.target.value / 100;
+            if (this.bgm) this.bgm.volume = this.bgmVolume;
+        };
+        document.getElementById('sfx-vol').oninput = (e) => {
+            this.sfxVolume = e.target.value / 100;
+        };
+
+        // Start menu music on first user interaction (browser autoplay policy)
+        const startMenuMusic = () => {
+            if (!this._started) {
+                this._started = true;
+                this.playBGM(this.menuMusicSrc);
+            }
+            document.removeEventListener('click', startMenuMusic);
+            document.removeEventListener('keydown', startMenuMusic);
+        };
+        document.addEventListener('click', startMenuMusic);
+        document.addEventListener('keydown', startMenuMusic);
+    },
+
+    playMenuBGM() {
+        this.playBGM(this.menuMusicSrc);
+    },
+
+    playGameBGM() {
+        this.playBGM(this.gameMusicSrc);
+    },
+
+    playBGM(src) {
+        if (this.bgm) {
+            this.bgm.pause();
+            this.bgm = null;
+        }
+        this.bgm = new Audio(src);
+        this.bgm.loop = true;
+        this.bgm.volume = this.bgmVolume;
+        this.bgm.play().catch(e => console.log('Auto-play blocked, wait for interaction.'));
+    },
+
+    playSFX(src) {
+        const sfx = new Audio(src);
+        sfx.volume = this.sfxVolume;
+        sfx.play();
+    }
+};
+window.AudioManager = AudioManager;
+AudioManager.init();
+
 /* Ryan Mendez - Game started: hide lobby, show game UI, start game with initial state. Short: all players to game screen. PDF: FR-6 (game session begins). */
 socket.on('gameStart', (initialState) => {
     lobbyScreen.classList.add('hidden');
     gameUi.classList.remove('hidden');
+    AudioManager.playGameBGM();
     startGame(initialState);
 });
 
@@ -190,6 +253,7 @@ socket.on('gameOver', (winner) => {
     gameUi.classList.add('hidden');
     gameOverScreen.classList.remove('hidden');
     document.getElementById('winner-text').textContent = winner === 'cat' ? 'CAT WINS' : 'MICE WIN';
+    AudioManager.playMenuBGM();
 });
 
 /* Ryan Mendez - Back to lobby from game over. Short: return to lobby. PDF: FR-18 (taken back to lobby). */
