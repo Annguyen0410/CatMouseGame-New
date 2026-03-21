@@ -7,16 +7,9 @@ Quick review: HTML generates the content on each webpage. CSS controls the UI on
 
 ### Other things
 
-Bugs to fix:
-
-* Terminals spawn a little too close together
-* The timers aren't ticking at regular time. A 30 second timer ticks extra slow and takes 2 minutes to finish
-* If you're a mouse and the cat kills you, there's no "You Died" screen
-
 Things to do:
-* Add music & sound effects
+* Add sound effects
 * Make artwork
-* Self host this on a website or host this website using Render
 
 Optional things to do:
 * Add more characters & add a character selection screen
