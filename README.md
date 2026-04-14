@@ -8,11 +8,10 @@ Quick review: HTML generates the content on each webpage. CSS controls the UI on
 ### Other things
 
 Things to do:
-* Add sound effects
-* Make artwork
+* Add characters
 
 Optional things to do:
-* Add more characters & add a character selection screen
+* Add a character selection screen
 * Add a currency system. You get coins everytime you win and you can use coins to buy powerups or new characters.
 
 ### database.js
