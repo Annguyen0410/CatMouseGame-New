@@ -16,6 +16,110 @@ let lastState = null;
 let animationId = null;
 let font = null; // For 3D text if needed, or use HTML overlay
 
+/* GLB model system */
+let catModelTemplate = null;
+let ratModelTemplate = null;
+const playerMixers = {};      // id -> THREE.AnimationMixer
+const playerAnimActions = {}; // id -> { idle, run }
+const playerIsMoving = {};    // id -> boolean
+const playerLastPos = {};     // id -> { x, y }
+const playerTargetRotY = {};  // id -> target Y rotation in radians
+const clock = new THREE.Clock();
+const CAT_MODEL_SCALE = 30;
+const RAT_MODEL_SCALE = 25;
+// Y lift so model sits on the floor — increase if it sinks, decrease if it floats
+const CAT_MODEL_Y = 0;
+const RAT_MODEL_Y = 0;
+// Rotate to correct for each model's export orientation
+const CAT_FACING_OFFSET = -Math.PI / 2; // Cat model exported facing +X → rotate -90°
+const RAT_FACING_OFFSET = 0;            // Rat model exported facing the correct direction
+
+function loadGameModels() {
+    const loader = new THREE.GLTFLoader();
+    loader.load('/Cat.glb',
+        gltf => { catModelTemplate = gltf; },
+        undefined,
+        err => console.warn('Cat.glb failed to load', err)
+    );
+    loader.load('/Rat.glb',
+        gltf => { ratModelTemplate = gltf; },
+        undefined,
+        err => console.warn('Rat.glb failed to load', err)
+    );
+}
+
+function createPlayerModel(role) {
+    const template = role === 'cat' ? catModelTemplate : ratModelTemplate;
+    if (!template) return null;
+
+    const group = new THREE.Group();
+    // SkeletonUtils.clone rebinds bone references correctly for skinned/animated meshes
+    const modelScene = THREE.SkeletonUtils
+        ? THREE.SkeletonUtils.clone(template.scene)
+        : template.scene.clone(true);
+    const scale = role === 'cat' ? CAT_MODEL_SCALE : RAT_MODEL_SCALE;
+    modelScene.scale.setScalar(scale);
+    modelScene.traverse(child => {
+        if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+            // Clone material(s) per player so opacity changes don't bleed to other players
+            if (Array.isArray(child.material)) {
+                child.material = child.material.map(m => m.clone());
+            } else {
+                child.material = child.material.clone();
+            }
+        }
+    });
+    group.add(modelScene);
+
+    const mixer = new THREE.AnimationMixer(modelScene);
+    const clips = template.animations;
+    const actions = {};
+
+    if (clips && clips.length > 0) {
+        const idleClip = clips.find(c => /idle|stand/i.test(c.name)) || clips[0];
+        const runClip  = clips.find(c => /run|walk|jog/i.test(c.name));
+
+        if (idleClip) {
+            actions.idle = mixer.clipAction(idleClip);
+            actions.idle.setLoop(THREE.LoopRepeat, Infinity);
+            actions.idle.play();
+        }
+        const resolvedRunClip = (runClip && runClip !== idleClip) ? runClip
+                              : (clips.length > 1 ? clips[1] : null);
+        if (resolvedRunClip) {
+            actions.run = mixer.clipAction(resolvedRunClip);
+            actions.run.setLoop(THREE.LoopRepeat, Infinity);
+            actions.run.clampWhenFinished = false;
+        }
+    }
+
+    return { group, mixer, actions };
+}
+
+function switchPlayerAnimation(id, moving) {
+    if (!playerAnimActions[id]) return;
+    const wasMoving = playerIsMoving[id];
+    if (moving === wasMoving) return;
+    playerIsMoving[id] = moving;
+
+    const { idle, run } = playerAnimActions[id];
+    if (moving && run) {
+        if (!run.isScheduled()) {
+            // First activation: explicitly start at weight 0 so the fade-in is a real cross-fade,
+            // not a full-weight blend of both animations at once (which makes run invisible/garbled)
+            run.setEffectiveWeight(0);
+            run.play();
+        }
+        if (idle) idle.fadeOut(0.2);
+        run.fadeIn(0.2);
+    } else if (!moving && idle) {
+        if (run) run.fadeOut(0.2);
+        idle.fadeIn(0.2); // idle never stopped playing — just faded out — so resume from current time
+    }
+}
+
 /* Ryan Mendez - Base materials. An Nguyen - 3D materials for Cat, Mouse, walls, floor, terminals, exit (used with textures). FR-9: client renders characters. */
 const MAT_CAT = new THREE.MeshLambertMaterial({ color: 0xff8800 }); // Orange
 const MAT_MOUSE = new THREE.MeshLambertMaterial({ color: 0x888888 }); // Grey
@@ -151,6 +255,7 @@ function startGame(initialState) {
     });
 
     myId = socket.id;
+    loadGameModels();
 
     /* Ryan Mendez - Terminal overlay button and Enter key submit. FR-10: interact with objects. */
     document.getElementById('terminal-submit-btn').onclick = submitTerminalAnswer;
@@ -280,6 +385,11 @@ function updateGame(state) {
     for (let id in players) {
         if (!state.players[id] || state.players[id].dead || state.players[id].escaped) {
             scene.remove(players[id].mesh);
+            if (playerMixers[id]) { playerMixers[id].stopAllAction(); delete playerMixers[id]; }
+            delete playerAnimActions[id];
+            delete playerLastPos[id];
+            delete playerIsMoving[id];
+            delete playerTargetRotY[id];
             delete players[id];
         }
     }
@@ -289,17 +399,33 @@ function updateGame(state) {
         const p = state.players[id];
         if (p.dead || p.escaped) continue;
 
-        if (!players[id]) {
-            /* An Nguyen - 3D player meshes: sphere (cat), box (mouse); part of 2D-to-3D migration. FR-9: characters in game world. */
-            const geo = p.role === 'cat' ? new THREE.SphereGeometry(20, 32, 32) : new THREE.BoxGeometry(25, 25, 25);
-            const mat = p.role === 'cat' ? MAT_CAT : MAT_MOUSE;
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            scene.add(mesh);
-            players[id] = { mesh: mesh, role: p.role };
+        /* Replace placeholder once the GLB template finishes loading */
+        if (players[id] && players[id].isPlaceholder) {
+            const template = p.role === 'cat' ? catModelTemplate : ratModelTemplate;
+            if (template) {
+                scene.remove(players[id].mesh);
+                delete players[id];
+            }
+        }
 
-            // Add a simple shadow blob or rely on light shadow
+        if (!players[id]) {
+            const modelData = createPlayerModel(p.role);
+            if (modelData) {
+                /* An Nguyen - GLB model replaces primitive mesh; hitbox sizes unchanged on server. FR-9: characters in game world. */
+                scene.add(modelData.group);
+                playerMixers[id] = modelData.mixer;
+                playerAnimActions[id] = modelData.actions;
+                playerIsMoving[id] = false;
+                players[id] = { mesh: modelData.group, role: p.role, isPlaceholder: false };
+            } else {
+                /* Fallback primitive while model is still downloading */
+                const geo = p.role === 'cat' ? new THREE.SphereGeometry(20, 32, 32) : new THREE.BoxGeometry(25, 25, 25);
+                const mat = p.role === 'cat' ? MAT_CAT : MAT_MOUSE;
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.castShadow = true;
+                scene.add(mesh);
+                players[id] = { mesh, role: p.role, isPlaceholder: true };
+            }
         }
 
         /* An Nguyen - Invisible skill: hide from cat view or show ghost to others. FR-9: character visibility. */
@@ -308,20 +434,45 @@ function updateGame(state) {
                 if (players[id]) players[id].mesh.visible = false;
                 continue;
             } else if (players[id]) {
-                players[id].mesh.material.transparent = true;
-                players[id].mesh.material.opacity = 0.3;
+                if (!players[id].isPlaceholder) {
+                    players[id].mesh.traverse(c => { if (c.isMesh) { c.material.transparent = true; c.material.opacity = 0.3; } });
+                } else {
+                    players[id].mesh.material.transparent = true;
+                    players[id].mesh.material.opacity = 0.3;
+                }
             }
         } else if (players[id]) {
             players[id].mesh.visible = true;
-            players[id].mesh.material.transparent = false;
-            players[id].mesh.material.opacity = 1.0;
+            if (!players[id].isPlaceholder) {
+                players[id].mesh.traverse(c => { if (c.isMesh) { c.material.transparent = false; c.material.opacity = 1.0; } });
+            } else {
+                players[id].mesh.material.transparent = false;
+                players[id].mesh.material.opacity = 1.0;
+            }
         }
 
         /* Ryan Mendez - Lerp player position and camera follow for local player. FR-9: observe game world. */
         const mesh = players[id].mesh;
+        const prevPos = playerLastPos[id] || { x: p.x, y: p.y };
+        const dx = p.x - prevPos.x;
+        const dz = p.y - prevPos.y; // server Y maps to 3D Z
+        playerLastPos[id] = { x: p.x, y: p.y };
+
+        const isMoving = Math.abs(dx) > 0.5 || Math.abs(dz) > 0.5;
+
+        if (!players[id].isPlaceholder) {
+            switchPlayerAnimation(id, isMoving);
+            // Update target rotation when moving; animate() lerps toward it each frame
+            if (isMoving) {
+                const facingOffset = players[id].role === 'cat' ? CAT_FACING_OFFSET : RAT_FACING_OFFSET;
+                playerTargetRotY[id] = Math.atan2(dx, dz) + facingOffset;
+            }
+        }
+
         mesh.position.x = lerp(mesh.position.x, p.x, 0.2);
         mesh.position.z = lerp(mesh.position.z, p.y, 0.2); // Server Y is 3D Z
-        mesh.position.y = 15; // Ground level offset
+        // Per-role Y lift — tune CAT_MODEL_Y / RAT_MODEL_Y if model sinks into or floats above floor
+        mesh.position.y = players[id].isPlaceholder ? 0 : (players[id].role === 'cat' ? CAT_MODEL_Y : RAT_MODEL_Y);
 
         if (id === myId) {
             const targetX = mesh.position.x;
@@ -460,6 +611,18 @@ function updateUI(state) {
 function animate() {
     animationId = requestAnimationFrame(animate);
 
+    const delta = clock.getDelta();
+    for (const id in playerMixers) {
+        playerMixers[id].update(delta);
+    }
+
+    // Smoothly rotate each model toward its movement direction each frame
+    for (const id in players) {
+        if (!players[id].isPlaceholder && playerTargetRotY[id] !== undefined) {
+            players[id].mesh.rotation.y = lerpAngle(players[id].mesh.rotation.y, playerTargetRotY[id], 0.18);
+        }
+    }
+
     if (!isTerminalOpen && myId && lastState && lastState.players[myId] && !lastState.players[myId].dead) {
         const input = {
             up: keys.w,
@@ -520,6 +683,12 @@ function onWindowResize() {
 /* Ryan Mendez - Linear interpolation for smooth position updates. FR-9: smooth view. */
 function lerp(start, end, amt) {
     return (1 - amt) * start + amt * end;
+}
+
+/* Angle interpolation taking the shortest arc around the circle (handles 350°→10° correctly). */
+function lerpAngle(current, target, amt) {
+    let diff = ((target - current + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    return current + diff * amt;
 }
 
 /* An Nguyen - Brief camera shake on cat hit. FR-13/14: feedback when caught. */
