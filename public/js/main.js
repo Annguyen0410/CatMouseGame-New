@@ -1,1 +1,267 @@
-test
+/**
+ * main.js - Client entry: Socket.IO, menu/lobby/game-over UI. Assignment 4 PDF: FR-1, FR-3, FR-18; Section 3.
+ */
+const socket = io();
+let currentUser = null;
+let currentLobby = null;
+
+const mainMenu = document.getElementById('main-menu');
+const lobbyScreen = document.getElementById('lobby-screen');
+const gameUi = document.getElementById('game-ui');
+const gameOverScreen = document.getElementById('game-over-screen');
+
+const panelLogin = document.getElementById('panel-login');
+const panelSettings = document.getElementById('panel-settings');
+
+/* Ryan Mendez - Hides login and settings slide panels. Short: close panels. PDF: FR-1 (main menu). */
+function closeAllPanels() {
+    panelLogin.classList.remove('visible-right');
+    panelLogin.classList.add('hidden-right');
+    panelSettings.classList.remove('visible-right');
+    panelSettings.classList.add('hidden-right');
+}
+
+/* Ryan Mendez - Start button toggles login panel. Short: main menu Login. PDF: FR-1 (Login option). */
+document.getElementById('btn-start').addEventListener('click', () => {
+    const isLoginOpen = panelLogin.classList.contains('visible-right');
+    closeAllPanels();
+    if (!isLoginOpen) {
+        panelLogin.classList.remove('hidden-right');
+        panelLogin.classList.add('visible-right');
+    }
+});
+
+/* Ryan Mendez - Settings button toggles settings panel. Short: audio/custom control menu. PDF: FR-20 (volume, custom control). */
+document.getElementById('btn-settings').addEventListener('click', () => {
+    const isSettingsOpen = panelSettings.classList.contains('visible-right');
+    closeAllPanels();
+    if (!isSettingsOpen) {
+        panelSettings.classList.remove('hidden-right');
+        panelSettings.classList.add('visible-right');
+    }
+});
+
+document.getElementById('close-settings').addEventListener('click', () => {
+    closeAllPanels();
+});
+
+/* Ryan Mendez - Login form submit; An Nguyen - preventDefault. Short: send credentials, show lobby. PDF: FR-1 (login/register), FR-2 (register). */
+const loginSubmitBtn = document.getElementById('login-submit-btn');
+document.getElementById('login-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const user = document.getElementById('username').value.trim();
+    const pass = document.getElementById('password').value;
+    const msgEl = document.getElementById('login-msg');
+    msgEl.textContent = '';
+    if (!user || !pass) {
+        msgEl.textContent = 'Enter username and password';
+        msgEl.style.color = '#ff5555';
+        return;
+    }
+    loginSubmitBtn.disabled = true;
+    loginSubmitBtn.textContent = 'Logging in...';
+    socket.emit('login', { username: user, password: pass });
+});
+
+/* Ryan Mendez - On login response: show lobby or error. Short: post-login UI. PDF: FR-1 (main menu with login). */
+socket.on('loginResponse', (res) => {
+    loginSubmitBtn.disabled = false;
+    loginSubmitBtn.textContent = 'Enter';
+    if (res.success) {
+        currentUser = res.username;
+        mainMenu.classList.add('hidden');
+        lobbyScreen.classList.remove('hidden');
+    } else {
+        const msg = document.getElementById('login-msg');
+        msg.textContent = res.message || 'Login failed';
+        msg.style.color = '#ff5555';
+        msg.style.marginTop = '10px';
+    }
+});
+
+/* Ryan Mendez - Create lobby and refresh list buttons. Short: form/join rooms. PDF: FR-4 (create room), FR-3 (view rooms). */
+document.getElementById('create-lobby-btn').addEventListener('click', () => {
+    socket.emit('createLobby');
+});
+
+document.getElementById('find-lobby-btn').addEventListener('click', () => {
+    socket.emit('getLobbies');
+});
+
+/* Ryan Mendez - Display lobby list overlay with join buttons. Short: lobby displays rooms. PDF: FR-3 (lobby displays rooms, players). */
+socket.on('lobbyList', (list) => {
+    const existing = document.getElementById('lobby-list-overlay');
+    if (existing) existing.remove();
+
+    const div = document.createElement('div');
+    div.id = 'lobby-list-overlay';
+    div.className = 'overlay-panel';
+
+    const h3 = document.createElement('h3');
+    h3.textContent = 'Available Lobbies';
+    div.appendChild(h3);
+
+    if (list.length === 0) {
+        const p = document.createElement('p');
+        p.className = 'overlay-empty';
+        p.textContent = 'No lobbies found. Create one!';
+        div.appendChild(p);
+    }
+
+    list.forEach(l => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = 'Lobby ' + l.id + ' (' + l.players.length + '/5)';
+        btn.className = 'lobby-join-btn';
+        btn.onclick = () => { socket.emit('joinLobby', l.id); div.remove(); };
+        div.appendChild(btn);
+    });
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = 'Cancel';
+    close.className = 'overlay-cancel-btn';
+    close.onclick = () => div.remove();
+    div.appendChild(close);
+
+    document.body.appendChild(div);
+});
+
+/* Ryan Mendez - Joined lobby: show id, timer, player list, leave button. Short: user in room. PDF: FR-5 (user in player list). */
+socket.on('joinedLobby', (data) => {
+    const { lobbyId, players: playerList } = typeof data === 'string' ? { lobbyId: data, players: [] } : data;
+    currentLobby = lobbyId;
+    const lobbyDisplay = document.getElementById('active-lobby-display');
+    lobbyDisplay.innerHTML = '<h2 id="lobby-title">Lobby: ' + lobbyId + '</h2><p id="lobby-timer">Waiting for players...</p><ul id="player-list"></ul><button type="button" id="leave-lobby-btn">Leave Lobby</button>';
+    applyLobbyStyles(lobbyDisplay);
+    document.getElementById('leave-lobby-btn').addEventListener('click', () => { socket.emit('leaveLobby'); });
+    updatePlayerList(playerList);
+});
+
+/* Ryan Mendez - Left lobby: reset display. Short: leave room UI. PDF: FR-3. */
+socket.on('leftLobby', () => {
+    currentLobby = null;
+    const lobbyDisplay = document.getElementById('active-lobby-display');
+    lobbyDisplay.innerHTML = '<h2 id="lobby-title">Lobby Selection</h2><p id="lobby-timer">Leave lobby — use Create or Refresh to join a game.</p><ul id="player-list"></ul>';
+    applyLobbyStyles(lobbyDisplay);
+});
+
+/* Ryan Mendez - Update player list when someone joins/leaves. Short: lobby players. PDF: FR-3 (number of players). */
+socket.on('lobbyPlayers', (playerList) => {
+    updatePlayerList(playerList);
+});
+
+/* Ryan Mendez - Applies font/size to lobby title. Short: lobby styling. PDF: FR-3. */
+function applyLobbyStyles(container) {
+    const h2 = container.querySelector('#lobby-title');
+    if (h2) { h2.style.fontFamily = "'Luckiest Guy', cursive"; h2.style.fontSize = '40px'; h2.style.letterSpacing = '2px'; }
+}
+
+/* Ryan Mendez - Renders player list in lobby. Short: show players in room. PDF: FR-3 (players in room). */
+function updatePlayerList(playerList) {
+    const ul = document.getElementById('player-list');
+    if (!ul) return;
+    ul.innerHTML = '';
+    (playerList || []).forEach(({ username }) => {
+        const li = document.createElement('li');
+        li.textContent = username;
+        li.className = 'lobby-player-item';
+        ul.appendChild(li);
+    });
+}
+
+socket.on('lobbyUpdate', () => {});
+
+/* Ryan Mendez - Lobby countdown display. Short: countdown then launch. PDF: FR-6 (countdown then game session launched). */
+socket.on('lobbyTimer', (time) => {
+    const timerEl = document.getElementById('lobby-timer');
+    if (timerEl) timerEl.textContent = 'Starting in: ' + time;
+});
+
+/* An Nguyen - Audio Manager: plays BGM and SFX with volume control synced to settings sliders. PDF: FR-20 (audio volume). */
+const AudioManager = {
+    bgm: null,
+    sfxVolume: 0.5,
+    bgmVolume: 0.5,
+    menuMusicSrc: 'assets/sounds/menu_background.mp3',
+    gameMusicSrc: 'assets/sounds/gameplay_background.mp3',
+    _started: false,
+
+    init() {
+        this.bgmVolume = document.getElementById('music-vol').value / 100;
+        this.sfxVolume = document.getElementById('sfx-vol').value / 100;
+
+        document.getElementById('music-vol').oninput = (e) => {
+            this.bgmVolume = e.target.value / 100;
+            if (this.bgm) this.bgm.volume = this.bgmVolume;
+        };
+        document.getElementById('sfx-vol').oninput = (e) => {
+            this.sfxVolume = e.target.value / 100;
+        };
+
+        // Start menu music on first user interaction (browser autoplay policy)
+        const startMenuMusic = () => {
+            if (!this._started) {
+                this._started = true;
+                this.playBGM(this.menuMusicSrc);
+            }
+            document.removeEventListener('click', startMenuMusic);
+            document.removeEventListener('keydown', startMenuMusic);
+        };
+        document.addEventListener('click', startMenuMusic);
+        document.addEventListener('keydown', startMenuMusic);
+    },
+
+    playMenuBGM() {
+        this.playBGM(this.menuMusicSrc);
+    },
+
+    playGameBGM() {
+        this.playBGM(this.gameMusicSrc);
+    },
+
+    playBGM(src) {
+        if (this.bgm) {
+            this.bgm.pause();
+            this.bgm = null;
+        }
+        this.bgm = new Audio(src);
+        this.bgm.loop = true;
+        this.bgm.volume = this.bgmVolume;
+        this.bgm.play().catch(e => console.log('Auto-play blocked, wait for interaction.'));
+    },
+
+    playSFX(src) {
+        const sfx = new Audio(src);
+        sfx.volume = this.sfxVolume;
+        sfx.play();
+    }
+};
+window.AudioManager = AudioManager;
+AudioManager.init();
+
+/* Ryan Mendez - Game started: hide lobby, show game UI, start game with initial state. Short: all players to game screen. PDF: FR-6 (game session begins). */
+socket.on('gameStart', (initialState) => {
+    lobbyScreen.classList.add('hidden');
+    gameUi.classList.remove('hidden');
+    AudioManager.playGameBGM();
+    startGame(initialState);
+});
+
+/* Ryan Mendez - Game over: show winner and game-over screen. Short: result shown. PDF: FR-16/17 (win condition), FR-18 (display result). */
+socket.on('gameOver', (winner) => {
+    gameUi.classList.add('hidden');
+    gameOverScreen.classList.remove('hidden');
+    document.getElementById('winner-text').textContent = winner === 'cat' ? 'CAT WINS' : 'MICE WIN';
+    AudioManager.playMenuBGM();
+});
+
+/* Ryan Mendez - Back to lobby from game over. Short: return to lobby. PDF: FR-18 (taken back to lobby). */
+document.getElementById('game-over-back').addEventListener('click', () => {
+    currentLobby = null;
+    gameOverScreen.classList.add('hidden');
+    lobbyScreen.classList.remove('hidden');
+    const lobbyDisplay = document.getElementById('active-lobby-display');
+    lobbyDisplay.innerHTML = '<h2 id="lobby-title">Lobby Selection</h2><p id="lobby-timer">Create or join a lobby to play.</p><ul id="player-list"></ul>';
+    applyLobbyStyles(lobbyDisplay);
+});
